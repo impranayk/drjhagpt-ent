@@ -45,7 +45,7 @@ st.set_page_config(
     page_title=config.BRAND_NAME,
     page_icon=logo_image(),
     layout="centered",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",   # show Options (model picker + PDF upload) by default
 )
 
 # ----------------------------------------------------------------------------- styling
