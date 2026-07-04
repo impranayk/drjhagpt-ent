@@ -1,0 +1,18 @@
+[
+  {"question": "What is VMware HCX?",
+   "expect": ["hybrid-cloud-extension", "learn-hcx"]},
+  {"question": "How do I configure and manage a vSphere HA cluster?",
+   "expect": ["vsphere-6-7-icm-module-9-2-configure-and-manage-a-vsphere-ha-cluster"]},
+  {"question": "How do I migrate VMware workloads to the cloud?",
+   "expect": ["migrating-vmware-workload-to-cloud"]},
+  {"question": "How should I size infrastructure for an AI workload?",
+   "expect": ["ai-infrastructure-sizing", "ai-sizing-tool"]},
+  {"question": "What is the VMware Private AI reference architecture?",
+   "expect": ["vmware-private-ai-reference-architecture"]},
+  {"question": "How does scaling inference trade off latency and throughput?",
+   "expect": ["scaling-inference"]},
+  {"question": "What are the steps to migrate a virtual machine using HCX?",
+   "expect": ["migrate-virtual-machine-using-hcx", "learn-hcx"]},
+  {"question": "What migration types does HCX support?",
+   "expect": ["hcx", "migrate"]}
+]

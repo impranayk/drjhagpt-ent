@@ -1,0 +1,48 @@
+name: Refresh knowledge index
+
+# Rebuilds the RAG index from drpranayjha.com so DrJhaGPT stays current with
+# newly published posts. Runs on GitHub's servers — no local machine needed.
+
+on:
+  schedule:
+    # 18:30 UTC = 00:00 IST (midnight in India) — nightly.
+    # Change this cron to reschedule; times are always in UTC.
+    - cron: "30 18 * * *"
+  workflow_dispatch: {}   # adds a manual "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write          # allow the job to commit the refreshed index
+
+concurrency:
+  group: refresh-index
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install indexing dependencies
+        run: pip install numpy requests python-dotenv fastembed
+
+      - name: Rebuild index from drpranayjha.com
+        run: python ingest/build_index.py
+
+      - name: Commit and push if the index changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- data/; then
+            echo "No content changes — index already up to date."
+          else
+            git add data/
+            git commit -m "chore: refresh knowledge index (automated nightly)"
+            git push
+          fi

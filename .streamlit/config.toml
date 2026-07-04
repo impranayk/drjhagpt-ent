@@ -1,0 +1,12 @@
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"
+
+# Brand palette matched to drpranayjha.com: white editorial theme, red accent.
+[theme]
+base = "light"
+primaryColor = "#ce242c"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f5f5"
+textColor = "#141618"
+font = "sans serif"
