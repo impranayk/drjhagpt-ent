@@ -265,6 +265,9 @@ def render_sidebar(user=None, roles=None):
         _cur = st.session_state.get("model", config.LLM_MODEL)
         st.session_state["model"] = st.selectbox(
             "Model", _opts, index=_opts.index(_cur) if _cur in _opts else 0)
+        st.session_state.setdefault("scope", "Website + PDF")
+        st.segmented_control(
+            "Answer from", ["Website + PDF", "Website", "PDF"], key="scope")
         _ingest_uploads(st.file_uploader("Chat with a PDF", type=["pdf"],
                                          accept_multiple_files=True))
         _docs = st.session_state.get("docs", {})
@@ -544,10 +547,11 @@ def main():
         # Observability: trace stage latencies + metadata (question is PII-redacted).
         trace = observability.Trace(guardrails.redact_pii(prompt), user=user or "anonymous")
 
+        scope = st.session_state.get("scope") or "Website + PDF"
         with st.spinner("Searching…"):
             with trace.span("retrieve"):
-                results = rag.retrieve(prompt)
-                doc_hits = _search_docs(prompt)
+                results = rag.retrieve(prompt) if scope != "PDF" else []
+                doc_hits = _search_docs(prompt) if scope != "Website" else []
                 context = _build_context(results, doc_hits)
 
         history = [
@@ -566,7 +570,7 @@ def main():
             return
 
         trace.set(mode=config.RETRIEVAL_MODE, model=st.session_state.get("model"),
-                  n_sources=len(results), n_doc_hits=len(doc_hits),
+                  scope=scope, n_sources=len(results), n_doc_hits=len(doc_hits),
                   sources=[r.get("url") for r in results], roles=roles)
         trace.save()
 
