@@ -65,6 +65,7 @@ chatbot/
   llm.py                Groq client + streaming
   retrieval.py          Hybrid (dense + BM25 + RRF) + reranking       (Phase 1)
   rag.py                Public interface, delegates to retrieval.py
+  vectorstore.py        Optional Qdrant (local) vector backend        (Phase 2)
   auth.py               Login gate (streamlit-authenticator)          (Phase 2)
   guardrails.py         Injection block + PII redaction + moderation  (Phase 2)
   observability.py      Per-request tracing to logs/traces.jsonl      (Phase 2)

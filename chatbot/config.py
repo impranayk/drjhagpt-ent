@@ -54,6 +54,7 @@ RETRIEVAL_MODE = _get("RETRIEVAL_MODE", "hybrid")
 RETRIEVE_CANDIDATES = int(_get("RETRIEVE_CANDIDATES", "40"))  # candidates before rerank
 RRF_K = int(_get("RRF_K", "60"))                             # reciprocal-rank-fusion constant
 RERANK_MODEL = _get("RERANK_MODEL", "Xenova/ms-marco-MiniLM-L-6-v2")
+VECTOR_BACKEND = _get("VECTOR_BACKEND", "numpy")   # "numpy" (default) | "qdrant" (local, embedded)
 
 # --- Phase 2: auth, guardrails, observability (all open-source, no license) ---
 AUTH_CONFIG_PATH = ROOT_DIR / ".streamlit" / "auth.yaml"

@@ -167,7 +167,7 @@ Structure-aware / parent-child chunking is a Phase 1 follow-up (see ROADMAP).
 | **Keyword search** | `rank-bm25` (BM25Okapi) |
 | **Fusion** | Reciprocal Rank Fusion |
 | **Reranker** | fastembed `TextCrossEncoder` · `ms-marco-MiniLM-L-6-v2` |
-| **Vector store** | in-memory NumPy (Phase 2: real vector DB — see ROADMAP) |
+| **Vector store** | in-memory NumPy (default) or **Qdrant** local/embedded (`VECTOR_BACKEND=qdrant`) |
 | **Evaluation** | golden set + hit@k / MRR harness |
 | **Auth** | streamlit-authenticator (login + roles) |
 | **Guardrails** | injection heuristics + PII redaction + optional Groq Llama Guard |
@@ -187,6 +187,7 @@ chatbot/
   llm.py                    Groq client + streaming generation
   retrieval.py              Hybrid (dense + BM25 + RRF) + reranking  ← Phase 1
   rag.py                    Public interface, delegates to retrieval.py
+  vectorstore.py            Optional Qdrant (local) vector backend   ← Phase 2
   auth.py                   Login gate (streamlit-authenticator)     ← Phase 2
   guardrails.py             Injection + PII + moderation             ← Phase 2
   observability.py          Per-request tracing → logs/traces.jsonl  ← Phase 2
@@ -223,6 +224,7 @@ refreshed `data/` index if content changed → push. No secrets (public content)
 | `RETRIEVE_CANDIDATES` | `40` | Fused candidates before rerank |
 | `RRF_K` | `60` | Reciprocal-rank-fusion constant |
 | `RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | Cross-encoder reranker |
+| `VECTOR_BACKEND` | `numpy` | `numpy` (default) or `qdrant` (local vector DB) |
 | `ENABLE_AUTH` | `1` | Require login (streamlit-authenticator) |
 | `ENABLE_GUARDRAILS` | `1` | Injection block + PII redaction |
 | `ENABLE_MODERATION` | `0` | Groq Llama Guard moderation (extra call) |

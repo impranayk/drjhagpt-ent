@@ -77,9 +77,21 @@ def has_knowledge() -> bool:
     return len(chunks) > 0 and vectors.size > 0
 
 
-def _dense_scores(question: str) -> np.ndarray:
+def _dense_topk(question: str, limit: int):
+    """Top-`limit` chunk indices + scores by dense similarity.
+
+    Uses the configured vector backend: in-memory NumPy (default) or Qdrant
+    (local/embedded) when VECTOR_BACKEND=qdrant.
+    """
+    q = _embed(question)
+    if getattr(config, "VECTOR_BACKEND", "numpy") == "qdrant":
+        from . import vectorstore
+
+        return vectorstore.search(q, limit)
     vectors, _ = _load()
-    return vectors @ _embed(question)          # index vectors are L2-normalized
+    scores = vectors @ q                        # index vectors are L2-normalized
+    order = np.argsort(scores)[::-1][:limit]
+    return [int(i) for i in order], [float(scores[i]) for i in order]
 
 
 def _bm25_scores(question: str) -> np.ndarray:
@@ -103,15 +115,13 @@ def retrieve(question: str, mode: str = None, top_k: int = None) -> List[Dict]:
     mode = mode or DEFAULT_MODE
     top_k = top_k or TOP_K
 
-    dense = _dense_scores(question)
-
     if mode == "dense":
-        order = np.argsort(dense)[::-1][:top_k]
-        picked = [(int(i), float(dense[i])) for i in order]
+        idx, scores = _dense_topk(question, top_k)
+        picked = list(zip(idx, scores))
     else:
+        dense_rank, _ = _dense_topk(question, CANDIDATES)
         bm25 = _bm25_scores(question)
-        dense_rank = np.argsort(dense)[::-1][:CANDIDATES]
-        bm25_rank = np.argsort(bm25)[::-1][:CANDIDATES]
+        bm25_rank = [int(i) for i in np.argsort(bm25)[::-1][:CANDIDATES]]
         fused = _rrf(dense_rank, bm25_rank)
         cand = sorted(fused, key=fused.get, reverse=True)[:CANDIDATES]
 

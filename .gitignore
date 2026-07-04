@@ -25,3 +25,6 @@ Thumbs.db
 # Model / embedding caches (downloaded at runtime, not committed)
 .cache/
 fastembed_cache/
+
+# Local Qdrant vector store (rebuilt from the committed index)
+data/qdrant/

@@ -43,7 +43,8 @@ Highest return on effort, cheapest to add.
       to `logs/traces.jsonl` (`chatbot/observability.py`)
 - [x] **CI** — `pytest` suite + retrieval eval on every push (`.github/workflows/ci.yml`)
 - [x] **Containerize** — `Dockerfile` + `docker-compose.yml`
-- [ ] Real **vector database** (pgvector / Qdrant / Weaviate) with incremental updates
+- [x] Real **vector database** — **Qdrant** (local/embedded, no server); toggle `VECTOR_BACKEND=qdrant` (NumPy stays default). Managed/clustered Qdrant or pgvector next.
+- [ ] Incremental / real-time index updates (vs. nightly full rebuild)
 - [ ] Kubernetes manifests + IaC (Terraform)
 - [ ] **Upgrade paths** (all open-source): **Keycloak** SSO · **Presidio** PII · **Phoenix/Langfuse** trace UI
 
