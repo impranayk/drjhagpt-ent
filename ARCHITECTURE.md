@@ -141,6 +141,12 @@ Layered on top of the retrieval core, each toggle-able via config:
 No license fees; the heavier upgrades (Keycloak, Presidio, Phoenix) are optional and
 self-hosted.
 
+**Interactive features (`chatbot/documents.py` + UI):** users can **upload a PDF**
+— it's extracted, chunked, and embedded in-session (same vector space as the site
+index) and searched alongside it, so answers can draw from the document with page
+citations. A sidebar **model picker** switches the LLM per request
+(`AVAILABLE_MODELS`).
+
 ---
 
 ## 5. Ingestion pipeline
@@ -192,6 +198,7 @@ chatbot/
   auth.py                   Login gate (streamlit-authenticator)     ← Phase 2
   guardrails.py             Injection + PII + moderation             ← Phase 2
   observability.py          Per-request tracing → logs/traces.jsonl  ← Phase 2
+  documents.py              PDF upload → chunk + embed (session)      ← Phase 2
 ingest/
   build_index.py            Pull site content → chunk → embed → index
 eval/

@@ -47,6 +47,12 @@ LLM_API_KEY = _get("LLM_API_KEY", "")          # token for the self-hosted endpo
 LLM_MODEL = _get("LLM_MODEL", GROQ_MODEL)      # model name for the chosen provider
 LLM_READY = bool(GROQ_API_KEY or LLM_BASE_URL)
 
+# Models offered in the UI picker (comma-separated). Groq open models by default.
+AVAILABLE_MODELS = [m.strip() for m in _get(
+    "AVAILABLE_MODELS",
+    "llama-3.3-70b-versatile,llama-3.1-8b-instant,gemma2-9b-it",
+).split(",") if m.strip()]
+
 # --- Retrieval / RAG ---
 EMBED_MODEL = _get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 RAG_TOP_K = int(_get("RAG_TOP_K", "4"))

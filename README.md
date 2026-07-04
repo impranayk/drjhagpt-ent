@@ -14,6 +14,8 @@ only free/open-source tools (no licenses):
 - **Phase 2** (partly shipped) — **login + roles** (bcrypt session auth),
   **guardrails** (prompt-injection block + PII redaction + optional Llama Guard),
   and **observability** (per-request tracing to `logs/traces.jsonl`).
+- **Interactive** — upload a **PDF** to chat with it (session-scoped), and a
+  **model picker** to switch LLMs on the fly.
 
 See [ROADMAP.md](ROADMAP.md) for the full plan and target production architecture.
 Demo login → **`demo` / `demo1234`** (change before real use).
@@ -71,6 +73,7 @@ chatbot/
   auth.py               Session login (bcrypt) + roles                (Phase 2)
   guardrails.py         Injection block + PII redaction + moderation  (Phase 2)
   observability.py      Per-request tracing to logs/traces.jsonl      (Phase 2)
+  documents.py          PDF upload -> chunk + embed (chat with a doc)  (Phase 2)
 ingest/build_index.py   Pull site content -> embed -> save index
 eval/                   Golden set + hit@k / MRR harness
 scripts/make_hash.py    Generate a bcrypt password hash for auth.yaml

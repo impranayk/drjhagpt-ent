@@ -18,7 +18,8 @@ SYSTEM_PROMPT = (
     "context — never invent titles, URLs, or placeholder links like (#). "
     "If the context does not contain the answer, say so briefly and then answer "
     "from general knowledge, making it clear that part is not from his "
-    "published work."
+    "published work. If the context includes an uploaded document excerpt, you "
+    "may use it and cite it as (document name, page N)."
 )
 
 
@@ -57,11 +58,12 @@ def build_messages(question: str, context: str, history: List[Dict]) -> List[Dic
     return messages
 
 
-def stream_answer(question: str, context: str, history: List[Dict]) -> Iterator[str]:
+def stream_answer(question: str, context: str, history: List[Dict],
+                  model: str = None) -> Iterator[str]:
     """Yield the answer token-by-token for a live typing effect."""
     messages = build_messages(question, context, history)
     completion = _client().chat.completions.create(
-        model=config.LLM_MODEL,
+        model=model or config.LLM_MODEL,
         messages=messages,
         temperature=0.3,
         max_tokens=1024,

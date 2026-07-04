@@ -10,7 +10,8 @@ from functools import lru_cache
 
 import streamlit as st
 
-from chatbot import auth, config, guardrails, llm, observability, rag
+from chatbot import (auth, config, documents, guardrails, llm, observability,
+                     rag, retrieval)
 
 # ----------------------------------------------------------------------------- assets
 @lru_cache(maxsize=1)
@@ -148,6 +149,12 @@ div[data-testid="stButton"] > button:hover {
 
 /* ---- Sidebar ---- */
 [data-testid="stSidebar"] { background: var(--panel); border-right: 1px solid var(--border); }
+
+/* ---- Options: model picker + PDF uploader ---- */
+[data-testid="stFileUploaderDropzone"] { border: 1.5px dashed var(--accent) !important;
+  background: #fff !important; border-radius: 10px !important; }
+[data-baseweb="select"] > div:focus-within { border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(206,36,44,.12) !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -207,6 +214,22 @@ def render_sidebar(user=None, roles=None):
             s = observability.summarize()
             st.divider()
             st.caption(f"📊 Traces: {s.get('traces', 0)} · avg ms {s.get('avg_latency_ms', {})}")
+
+        st.divider()
+        st.markdown("**⚙ Options**")
+        _opts = list(dict.fromkeys([config.LLM_MODEL] + config.AVAILABLE_MODELS))
+        _cur = st.session_state.get("model", config.LLM_MODEL)
+        st.session_state["model"] = st.selectbox(
+            "Model", _opts, index=_opts.index(_cur) if _cur in _opts else 0)
+        _ingest_uploads(st.file_uploader("Chat with a PDF", type=["pdf"],
+                                         accept_multiple_files=True))
+        _docs = st.session_state.get("docs", {})
+        for _name, (_ch, _v) in _docs.items():
+            st.caption(f"📄 {_name} — {len(_ch)} chunks")
+        if _docs and st.button("Clear documents", use_container_width=True):
+            st.session_state.pop("docs", None)
+            st.rerun()
+
         if st.button("Clear conversation", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
@@ -237,6 +260,62 @@ def render_user(text: str):
     st.markdown(
         f'<div class="dj-user-row"><div class="dj-user-bubble">'
         f'{html.escape(text)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _ingest_uploads(files):
+    """Process newly uploaded PDFs into session-scoped, embedded chunks."""
+    if not files:
+        return
+    docs = st.session_state.setdefault("docs", {})
+    for f in files:
+        if f.name in docs:
+            continue
+        try:
+            with st.spinner(f"Reading {f.name}…"):
+                docs[f.name] = documents.process(f, f.name)
+        except Exception as exc:
+            st.warning(f"Couldn't read {f.name}: {exc}")
+
+
+def _search_docs(prompt):
+    """Top matches across all uploaded documents for this question."""
+    docs = st.session_state.get("docs", {})
+    if not docs:
+        return []
+    qv = retrieval._embed(prompt)
+    hits = []
+    for _name, (chunks, vecs) in docs.items():
+        hits += documents.search(qv, chunks, vecs, top_k=3)
+    return sorted(hits, key=lambda h: h["score"], reverse=True)[:3]
+
+
+def _build_context(results, doc_hits):
+    parts = []
+    if doc_hits:
+        parts.append(documents.format_context(doc_hits))
+    parts.append(rag.format_context(results))
+    return "\n\n".join(p for p in parts if p)
+
+
+def render_doc_sources(hits):
+    if not hits:
+        return
+    seen, cards = set(), []
+    for h in hits:
+        key = (h.get("source"), h.get("page"))
+        if key in seen:
+            continue
+        seen.add(key)
+        cards.append(
+            '<div class="dj-source" style="cursor:default">'
+            f'<span class="dj-source-title">{html.escape(str(h.get("source", "")))}</span>'
+            f'<span class="dj-source-host">page {h.get("page", "?")} · your upload</span></div>'
+        )
+    st.markdown(
+        '<div class="dj-sources"><div class="dj-sources-label">'
+        'From your uploaded document</div>' + "".join(cards) + "</div>",
         unsafe_allow_html=True,
     )
 
@@ -315,6 +394,8 @@ def main():
                 st.markdown(msg["content"])
                 if msg.get("sources"):
                     render_sources(msg["sources"])
+                if msg.get("doc_sources"):
+                    render_doc_sources(msg["doc_sources"])
 
     typed = st.chat_input("Ask Pranay anything about Intelligent Infrastructure…")
     prompt = typed or st.session_state.pop("pending", None)
@@ -341,10 +422,11 @@ def main():
         # Observability: trace stage latencies + metadata (question is PII-redacted).
         trace = observability.Trace(guardrails.redact_pii(prompt), user=user or "anonymous")
 
-        with st.spinner("Searching Dr. Jha's articles…"):
+        with st.spinner("Searching…"):
             with trace.span("retrieve"):
                 results = rag.retrieve(prompt)
-                context = rag.format_context(results)
+                doc_hits = _search_docs(prompt)
+                context = _build_context(results, doc_hits)
 
         history = [
             {"role": m["role"], "content": m["content"]}
@@ -353,20 +435,24 @@ def main():
 
         try:
             with trace.span("generate"):
-                answer = st.write_stream(llm.stream_answer(prompt, context, history))
+                answer = st.write_stream(
+                    llm.stream_answer(prompt, context, history,
+                                      model=st.session_state.get("model")))
         except Exception as exc:
             st.error(f"Sorry — the model call failed: {exc}")
             st.session_state.messages.pop()
             return
 
         render_sources(results)
+        render_doc_sources(doc_hits)
 
-        trace.set(mode=config.RETRIEVAL_MODE, n_sources=len(results),
+        trace.set(mode=config.RETRIEVAL_MODE, model=st.session_state.get("model"),
+                  n_sources=len(results), n_doc_hits=len(doc_hits),
                   sources=[r.get("url") for r in results], roles=roles)
         trace.save()
 
     st.session_state.messages.append(
-        {"role": "assistant", "content": answer, "sources": results}
+        {"role": "assistant", "content": answer, "sources": results, "doc_sources": doc_hits}
     )
 
 
