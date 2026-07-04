@@ -50,7 +50,8 @@ LLM_READY = bool(GROQ_API_KEY or LLM_BASE_URL)
 # Models offered in the UI picker (comma-separated). Groq open models by default.
 AVAILABLE_MODELS = [m.strip() for m in _get(
     "AVAILABLE_MODELS",
-    "llama-3.3-70b-versatile,llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile,llama-3.1-8b-instant,openai/gpt-oss-120b,"
+    "meta-llama/llama-4-scout-17b-16e-instruct,qwen/qwen3-32b",
 ).split(",") if m.strip()]
 
 # --- Retrieval / RAG ---
