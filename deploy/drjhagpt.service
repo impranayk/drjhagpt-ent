@@ -1,10 +1,10 @@
-# systemd unit for DrJhaGPT Enterprise (Python + venv deployment).
+# systemd unit for DrJhaGPT Pro (Python + venv deployment).
 # Edit User / WorkingDirectory / paths, then:
 #   sudo cp deploy/drjhagpt.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now drjhagpt
 
 [Unit]
-Description=DrJhaGPT Enterprise (Streamlit)
+Description=DrJhaGPT Pro (Streamlit)
 After=network-online.target
 Wants=network-online.target
 

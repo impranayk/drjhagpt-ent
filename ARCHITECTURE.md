@@ -1,6 +1,6 @@
-# DrJhaGPT Enterprise — Architecture
+# DrJhaGPT Pro — Architecture
 
-The **production-hardening track** for DrJhaGPT: an open-source, retrieval-augmented
+The **production-hardened (Pro) edition** of DrJhaGPT: an open-source, retrieval-augmented
 chatbot over Dr. Pranay Jha's published work at
 [drpranayjha.com](https://drpranayjha.com).
 
@@ -21,7 +21,7 @@ flowchart LR
       W["Chat widget / page / full-screen"]
     end
 
-    subgraph App["DrJhaGPT Enterprise"]
+    subgraph App["DrJhaGPT Pro"]
       UI["Streamlit UI<br/>streamlit_app.py"]
       RET["Hybrid retriever + reranker<br/>chatbot/retrieval.py"]
       LLMC["Groq client<br/>chatbot/llm.py"]
@@ -196,7 +196,7 @@ chatbot/
   retrieval.py              Hybrid (dense + BM25 + RRF) + reranking  ← Phase 1
   rag.py                    Public interface, delegates to retrieval.py
   vectorstore.py            Optional Qdrant (local) vector backend   ← Phase 2
-  auth.py                   Login gate (streamlit-authenticator)     ← Phase 2
+  auth.py                   Login gate (bcrypt session login + roles) ← Phase 2
   guardrails.py             Injection + PII + moderation             ← Phase 2
   observability.py          Per-request tracing → logs/traces.jsonl  ← Phase 2
   documents.py              PDF upload → chunk + embed (session)      ← Phase 2
@@ -237,7 +237,7 @@ refreshed `data/` index if content changed → push. No secrets (public content)
 | `RRF_K` | `60` | Reciprocal-rank-fusion constant |
 | `RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | Cross-encoder reranker |
 | `VECTOR_BACKEND` | `numpy` | `numpy` (default) or `qdrant` (local vector DB) |
-| `ENABLE_AUTH` | `1` | Require login (streamlit-authenticator) |
+| `ENABLE_AUTH` | `1` | Require login (bcrypt session login + roles) |
 | `ENABLE_GUARDRAILS` | `1` | Injection block + PII redaction |
 | `ENABLE_MODERATION` | `0` | Groq Llama Guard moderation (extra call) |
 | `ENABLE_TRACING` | `1` | Write request traces to `logs/traces.jsonl` |

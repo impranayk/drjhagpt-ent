@@ -1,4 +1,4 @@
-# On-prem stack for DrJhaGPT Enterprise.
+# On-prem stack for DrJhaGPT Pro.
 # Run from the repo root:
 #   docker compose -f deploy/docker-compose.onprem.yml up -d --build
 services:

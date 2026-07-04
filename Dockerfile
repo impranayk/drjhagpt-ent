@@ -1,4 +1,4 @@
-# DrJhaGPT Enterprise — container image
+# DrJhaGPT Pro — container image
 FROM python:3.12-slim
 
 WORKDIR /app

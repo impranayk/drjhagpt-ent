@@ -1,6 +1,6 @@
-# DrJhaGPT Enterprise
+# DrJhaGPT Pro
 
-**GenAI for Intelligent Infrastructure — production hardening track.**
+**GenAI for Intelligent Infrastructure — the production-hardened (Pro) edition.**
 
 An open-source RAG (Retrieval-Augmented Generation) chatbot that answers
 questions about **VMware, cloud, datacenters, and AI** using Dr. Pranay Jha's

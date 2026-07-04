@@ -1,6 +1,6 @@
 # On-Prem Deployment Guide
 
-How to run **DrJhaGPT Enterprise** inside your own datacenter — from a single VM
+How to run **DrJhaGPT Pro** inside your own datacenter — from a single VM
 to Kubernetes / VMware Cloud Foundation — including an **air-gapped** option where
 nothing leaves your network.
 

@@ -1,4 +1,4 @@
-# DrJhaGPT Enterprise — Roadmap
+# DrJhaGPT Pro — Roadmap
 
 This repo takes the base [DrJhaGPT](https://github.com/impranayk/DrJhaGPT) RAG
 assistant and hardens it toward a production, enterprise-grade system. The base

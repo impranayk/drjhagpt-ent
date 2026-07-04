@@ -1,4 +1,4 @@
-# DEMO credentials for streamlit-authenticator (open-source, no license).
+# DEMO credentials for the bcrypt session login (open-source, no license).
 # CHANGE the cookie key and these users before any real use.
 # Generate a password hash:  python scripts/make_hash.py "your-password"
 # Demo login →  username: demo   password: demo1234
