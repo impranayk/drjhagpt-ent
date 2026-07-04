@@ -479,7 +479,7 @@ def main():
         render_empty_state()
 
     # Replay history.
-    for msg in st.session_state.messages:
+    for i, msg in enumerate(st.session_state.messages):
         if msg["role"] == "user":
             render_user(msg["content"])
         else:
