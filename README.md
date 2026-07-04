@@ -92,6 +92,22 @@ streamlit run streamlit_app.py    # index is committed; rebuild via ingest/ when
 
 Get a free Groq API key at <https://console.groq.com/keys>.
 
+## Tests & CI
+
+```bash
+pip install pytest
+pytest                     # unit tests: guardrails, tracing, retrieval
+python eval/run_eval.py    # retrieval eval (dense / hybrid / hybrid_rerank)
+```
+
+CI runs both on every push (`.github/workflows/ci.yml`).
+
+## Docker
+
+```bash
+docker compose up --build  # serves on http://localhost:8501
+```
+
 ## Deploy free (Streamlit Community Cloud)
 
 1. Push this repo to GitHub.

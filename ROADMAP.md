@@ -41,8 +41,10 @@ Highest return on effort, cheapest to add.
       moderation (`chatbot/guardrails.py`)
 - [x] **Observability** — per-request tracing of stage latencies, sources, and user, written
       to `logs/traces.jsonl` (`chatbot/observability.py`)
+- [x] **CI** — `pytest` suite + retrieval eval on every push (`.github/workflows/ci.yml`)
+- [x] **Containerize** — `Dockerfile` + `docker-compose.yml`
 - [ ] Real **vector database** (pgvector / Qdrant / Weaviate) with incremental updates
-- [ ] Containerize (Docker/K8s) + CI/CD + IaC
+- [ ] Kubernetes manifests + IaC (Terraform)
 - [ ] **Upgrade paths** (all open-source): **Keycloak** SSO · **Presidio** PII · **Phoenix/Langfuse** trace UI
 
 ### Phase 3 — Enterprise

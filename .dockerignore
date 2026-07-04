@@ -1,0 +1,11 @@
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+logs/
+.env
+.env.local
+.cache/
+fastembed_cache/
+tests/

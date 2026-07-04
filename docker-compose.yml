@@ -1,0 +1,9 @@
+services:
+  drjhagpt:
+    build: .
+    image: drjhagpt-enterprise
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env          # GROQ_API_KEY, optional ENABLE_* toggles
+    restart: unless-stopped
