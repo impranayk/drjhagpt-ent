@@ -94,8 +94,15 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .dj-rule { height: 1.5px; background: var(--accent); width: 100%; border: 0; margin: 14px 0 6px;
            border-radius: 0; }
 
-/* Frozen (sticky) header while the conversation scrolls under it */
-.st-key-dj_header { position: sticky; top: 0; z-index: 100; background: #ffffff; padding-top: .4rem; }
+/* Frozen (sticky) header while the conversation scrolls under it.
+   !important is required: Streamlit sets position:relative on the block
+   wrapper with equal specificity, so without it our sticky is overridden.
+   The :has() rule also covers the case where the key lands one level in. */
+.st-key-dj_header,
+[data-testid="stVerticalBlockBorderWrapper"]:has(> .st-key-dj_header) {
+  position: sticky !important; top: 0 !important; z-index: 100;
+  background: #ffffff; padding-top: .4rem;
+}
 
 /* Compact the frozen header on small screens so it steals less vertical room */
 @media (max-width: 640px) {
