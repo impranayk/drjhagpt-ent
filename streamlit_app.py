@@ -10,7 +10,7 @@ from functools import lru_cache
 
 import streamlit as st
 
-from chatbot import config, llm, rag
+from chatbot import auth, config, guardrails, llm, observability, rag
 
 # ----------------------------------------------------------------------------- assets
 @lru_cache(maxsize=1)
@@ -190,15 +190,23 @@ def render_header():
     st.markdown('<hr class="dj-rule">', unsafe_allow_html=True)
 
 
-def render_sidebar():
+def render_sidebar(user=None, roles=None):
     with st.sidebar:
         st.markdown(f"### {config.BRAND_NAME}")
+        if config.ENABLE_AUTH and user:
+            st.caption(f"Signed in as **{user}**" + (f" · {', '.join(roles)}" if roles else ""))
+            auth.render_logout()
         st.caption("Grounded in Dr. Pranay Jha's published work on VMware, "
                    "cloud, datacenters & AI.")
         st.markdown(f"🌐 [drpranayjha.com]({config.WEBSITE_URL})")
         st.divider()
         st.caption(f"Model: `{config.GROQ_MODEL}` · via Groq")
+        st.caption(f"Retrieval: `{config.RETRIEVAL_MODE}`")
         st.caption("Knowledge base: " + ("✅ loaded" if rag.has_knowledge() else "⚠️ not built"))
+        if config.ENABLE_TRACING and roles and "admin" in roles:
+            s = observability.summarize()
+            st.divider()
+            st.caption(f"📊 Traces: {s.get('traces', 0)} · avg ms {s.get('avg_latency_ms', {})}")
         if st.button("Clear conversation", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
@@ -274,7 +282,13 @@ def _hide_streamlit_badge():
 
 def main():
     _hide_streamlit_badge()
-    render_sidebar()
+
+    # Phase 2: open-source login gate (no-op if ENABLE_AUTH is off).
+    authed, user, roles = auth.gate()
+    if not authed:
+        return
+
+    render_sidebar(user, roles)
     render_header()
 
     if not config.GROQ_API_KEY:
@@ -310,15 +324,27 @@ def main():
     st.session_state.messages.append({"role": "user", "content": prompt})
     render_user(prompt)
 
+    # Guardrail: block obvious prompt-injection before any retrieval/model call.
+    allowed, reason = guardrails.check_input(prompt)
+    if not allowed:
+        with st.chat_message("assistant", avatar=logo_image()):
+            st.warning(reason)
+        st.session_state.messages.append({"role": "assistant", "content": reason, "sources": []})
+        return
+
     with st.chat_message("assistant", avatar=logo_image()):
         if not config.GROQ_API_KEY:
             st.error("Add your Groq API key first (see the message above).")
             st.session_state.messages.pop()
             return
 
+        # Observability: trace stage latencies + metadata (question is PII-redacted).
+        trace = observability.Trace(guardrails.redact_pii(prompt), user=user or "anonymous")
+
         with st.spinner("Searching Dr. Jha's articles…"):
-            results = rag.retrieve(prompt)
-            context = rag.format_context(results)
+            with trace.span("retrieve"):
+                results = rag.retrieve(prompt)
+                context = rag.format_context(results)
 
         history = [
             {"role": m["role"], "content": m["content"]}
@@ -326,13 +352,18 @@ def main():
         ][-6:]
 
         try:
-            answer = st.write_stream(llm.stream_answer(prompt, context, history))
+            with trace.span("generate"):
+                answer = st.write_stream(llm.stream_answer(prompt, context, history))
         except Exception as exc:
             st.error(f"Sorry — the model call failed: {exc}")
             st.session_state.messages.pop()
             return
 
         render_sources(results)
+
+        trace.set(mode=config.RETRIEVAL_MODE, n_sources=len(results),
+                  sources=[r.get("url") for r in results], roles=roles)
+        trace.save()
 
     st.session_state.messages.append(
         {"role": "assistant", "content": answer, "sources": results}

@@ -5,3 +5,9 @@ fastembed>=0.4
 numpy>=1.26
 requests>=2.31
 rank-bm25>=0.2.2
+streamlit-authenticator>=0.4.0
+PyYAML>=6.0
+bcrypt>=4.0
+# Optional (Phase 2 upgrades — not required to run):
+#   presidio-analyzer, presidio-anonymizer   -> production-grade PII (set USE_PRESIDIO=1)
+#   arize-phoenix                             -> hosted trace UI over logs/traces.jsonl

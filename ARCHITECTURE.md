@@ -120,6 +120,28 @@ a larger golden set. The harness exists precisely to make that call with data.
 
 ---
 
+## 4b. Phase 2 — security & observability (all open-source, no license)
+
+Layered on top of the retrieval core, each toggle-able via config:
+
+- **Auth (`chatbot/auth.py`)** — cookie-based login with bcrypt-hashed passwords and
+  per-user **roles** via `streamlit-authenticator`. The app is gated (no chat until
+  logged in). Demo: `demo` / `demo1234` in `.streamlit/auth.yaml`. Upgrade path:
+  Keycloak/Authentik for full OIDC/SAML SSO.
+- **Guardrails (`chatbot/guardrails.py`)** — before any model call, input is screened
+  for **prompt-injection** (blocked if matched); **PII** is redacted (regex, or
+  Microsoft **Presidio** if enabled) before it hits the logs; optional **moderation**
+  via Groq's open **Llama Guard**.
+- **Observability (`chatbot/observability.py`)** — each request records stage
+  latencies (retrieve / generate), sources, user, and mode as a span-set to
+  `logs/traces.jsonl` — the shape Arize **Phoenix** / OpenTelemetry consume, so it
+  upgrades to a full trace UI with no call-site changes.
+
+No license fees; the heavier upgrades (Keycloak, Presidio, Phoenix) are optional and
+self-hosted.
+
+---
+
 ## 5. Ingestion pipeline
 
 ```mermaid
@@ -147,6 +169,9 @@ Structure-aware / parent-child chunking is a Phase 1 follow-up (see ROADMAP).
 | **Reranker** | fastembed `TextCrossEncoder` · `ms-marco-MiniLM-L-6-v2` |
 | **Vector store** | in-memory NumPy (Phase 2: real vector DB — see ROADMAP) |
 | **Evaluation** | golden set + hit@k / MRR harness |
+| **Auth** | streamlit-authenticator (login + roles) |
+| **Guardrails** | injection heuristics + PII redaction + optional Groq Llama Guard |
+| **Observability** | local per-request tracing (`logs/traces.jsonl`) |
 | **UI** | Streamlit |
 | **Knowledge source** | WordPress REST API of drpranayjha.com |
 | **Auto-refresh** | GitHub Actions (nightly cron) |
@@ -162,6 +187,9 @@ chatbot/
   llm.py                    Groq client + streaming generation
   retrieval.py              Hybrid (dense + BM25 + RRF) + reranking  ← Phase 1
   rag.py                    Public interface, delegates to retrieval.py
+  auth.py                   Login gate (streamlit-authenticator)     ← Phase 2
+  guardrails.py             Injection + PII + moderation             ← Phase 2
+  observability.py          Per-request tracing → logs/traces.jsonl  ← Phase 2
 ingest/
   build_index.py            Pull site content → chunk → embed → index
 eval/
@@ -195,6 +223,11 @@ refreshed `data/` index if content changed → push. No secrets (public content)
 | `RETRIEVE_CANDIDATES` | `40` | Fused candidates before rerank |
 | `RRF_K` | `60` | Reciprocal-rank-fusion constant |
 | `RERANK_MODEL` | `Xenova/ms-marco-MiniLM-L-6-v2` | Cross-encoder reranker |
+| `ENABLE_AUTH` | `1` | Require login (streamlit-authenticator) |
+| `ENABLE_GUARDRAILS` | `1` | Injection block + PII redaction |
+| `ENABLE_MODERATION` | `0` | Groq Llama Guard moderation (extra call) |
+| `ENABLE_TRACING` | `1` | Write request traces to `logs/traces.jsonl` |
+| `USE_PRESIDIO` | `0` | Use Presidio for PII (if installed) |
 
 ---
 

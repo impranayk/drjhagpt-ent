@@ -55,6 +55,17 @@ RETRIEVE_CANDIDATES = int(_get("RETRIEVE_CANDIDATES", "40"))  # candidates befor
 RRF_K = int(_get("RRF_K", "60"))                             # reciprocal-rank-fusion constant
 RERANK_MODEL = _get("RERANK_MODEL", "Xenova/ms-marco-MiniLM-L-6-v2")
 
+# --- Phase 2: auth, guardrails, observability (all open-source, no license) ---
+AUTH_CONFIG_PATH = ROOT_DIR / ".streamlit" / "auth.yaml"
+ENABLE_AUTH = _get("ENABLE_AUTH", "1") == "1"
+ENABLE_GUARDRAILS = _get("ENABLE_GUARDRAILS", "1") == "1"
+ENABLE_TRACING = _get("ENABLE_TRACING", "1") == "1"
+ENABLE_MODERATION = _get("ENABLE_MODERATION", "0") == "1"   # Groq Llama Guard (extra call)
+GUARD_MODEL = _get("GUARD_MODEL", "llama-guard-3-8b")
+USE_PRESIDIO = _get("USE_PRESIDIO", "0") == "1"             # production-grade PII engine
+LOGS_DIR = ROOT_DIR / "logs"
+TRACE_PATH = LOGS_DIR / "traces.jsonl"
+
 # --- Branding (matched to drpranayjha.com) ---
 BRAND_NAME = "DrJhaGPT"
 BRAND_EYEBROW = "Journal of Intelligent Infrastructure"

@@ -35,12 +35,15 @@ Highest return on effort, cheapest to add.
 - [ ] Structure-aware / parent-child chunking in the ingestion step
 - [ ] Query rewriting + multi-query expansion
 
-### Phase 2 — Hardening
+### Phase 2 — Hardening (partly shipped, all open-source)
+- [x] **Auth** — login + per-user roles via `streamlit-authenticator` (`chatbot/auth.py`)
+- [x] **Guardrails** — prompt-injection block + PII redaction + optional Groq **Llama Guard**
+      moderation (`chatbot/guardrails.py`)
+- [x] **Observability** — per-request tracing of stage latencies, sources, and user, written
+      to `logs/traces.jsonl` (`chatbot/observability.py`)
 - [ ] Real **vector database** (pgvector / Qdrant / Weaviate) with incremental updates
 - [ ] Containerize (Docker/K8s) + CI/CD + IaC
-- [ ] **AuthN/AuthZ** (SSO, RBAC)
-- [ ] **Observability** — tracing of every retrieval + generation (Langfuse/Phoenix)
-- [ ] **Guardrails** — prompt-injection, PII, moderation (input + output)
+- [ ] **Upgrade paths** (all open-source): **Keycloak** SSO · **Presidio** PII · **Phoenix/Langfuse** trace UI
 
 ### Phase 3 — Enterprise
 - [ ] **Permission-aware retrieval** (ACL-filtered results)

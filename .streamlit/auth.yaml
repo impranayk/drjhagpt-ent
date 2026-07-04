@@ -1,0 +1,16 @@
+# DEMO credentials for streamlit-authenticator (open-source, no license).
+# CHANGE the cookie key and these users before any real use.
+# Generate a password hash:  python scripts/make_hash.py "your-password"
+# Demo login →  username: demo   password: demo1234
+cookie:
+  name: drjhagpt_auth
+  key: change-this-random-signature-key
+  expiry_days: 30
+credentials:
+  usernames:
+    demo:
+      email: demo@drpranayjha.com
+      name: Demo User
+      password: $2b$12$EmB.DDjR9zyqGXp/x5G4RuKV.SwoXHoZLpP9vr.TJ4wKHxsIwcGpC
+      roles:
+        - viewer
