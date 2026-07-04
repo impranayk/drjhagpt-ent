@@ -21,7 +21,7 @@ flowchart LR
       W["Chat widget / page / full-screen"]
     end
     subgraph App["DrJhaGPT (Streamlit Cloud)"]
-      UI["Streamlit UI"] --> RAG["Retriever"] --> IDX[("Knowledge index")]
+      UI["Streamlit UI"] --> RAG["Hybrid retriever<br/>+ rerank"] --> IDX[("Knowledge index")]
       UI --> LLMC["Groq client"] --> GROQ[["Llama 3.3 70B via Groq"]]
     end
     W -->|iframe| UI
@@ -40,7 +40,8 @@ flowchart LR
 | UI | Streamlit |
 | LLM (generation) | Open models (Llama 3.3 / Mixtral) via [Groq](https://groq.com) free API |
 | Embeddings | [fastembed](https://github.com/qdrant/fastembed) (ONNX, no PyTorch) |
-| Retrieval | NumPy cosine similarity over a prebuilt index |
+| Retrieval | **Hybrid** — dense vectors + BM25, fused with Reciprocal Rank Fusion; optional cross-encoder reranker |
+| Evaluation | Golden-set harness (hit@k / MRR per mode) |
 | Knowledge source | WordPress REST API of drpranayjha.com |
 
 Fully open-source, no paid infrastructure.
@@ -50,13 +51,18 @@ Fully open-source, no paid infrastructure.
 ```
 streamlit_app.py        Main app (entry point for Streamlit Cloud)
 chatbot/
-  config.py             Settings (env / Streamlit secrets)
+  config.py             Settings (env / Streamlit secrets, retrieval mode)
   llm.py                Groq client + streaming
-  rag.py                Retrieval over your website content
+  retrieval.py          Hybrid (dense + BM25 + RRF) + reranking
+  rag.py                Public interface, delegates to retrieval.py
 ingest/
   build_index.py        Pull site content -> embed -> save index
+eval/
+  golden.json           Golden question set
+  run_eval.py           hit@k / MRR per retrieval mode
 data/                   Prebuilt knowledge index (committed)
-.streamlit/config.toml  Brand theme (dark navy + red)
+ROADMAP.md              Target architecture + Phase 2/3 plan
+.streamlit/config.toml  Brand theme
 ```
 
 ## Run locally
@@ -67,8 +73,8 @@ python -m venv .venv
 pip install -r requirements.txt
 
 copy .env.example .env            # then paste your Groq key into .env
-python ingest/build_index.py      # build the knowledge index (one-time / on content change)
-streamlit run streamlit_app.py
+python eval/run_eval.py           # compare retrieval modes (no Groq key needed)
+streamlit run streamlit_app.py    # index is committed; rebuild via ingest/ when content changes
 ```
 
 Get a free Groq API key at <https://console.groq.com/keys>.
