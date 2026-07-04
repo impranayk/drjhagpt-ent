@@ -428,44 +428,52 @@ def render_empty_state():
 
 
 # ----------------------------------------------------------------------------- app
-def _hide_streamlit_badge():
-    """Remove the Community Cloud 'Built with Streamlit' bar + Fullscreen link.
+def _run_js(js: str):
+    """Execute JS in a 0-height frame that can reach the app DOM.
 
-    CSS can't reliably target it, so we run JS in a same-origin child frame that
-    walks the parent DOM and hides those elements by their link/text (robust to
-    Streamlit's changing class names). Re-runs on an interval since the badge is
-    injected after load.
+    st.components.v1.html renders a same-origin child iframe whose scripts run
+    reliably (inline st.html is sanitized on some hosts). Falls back to st.html.
     """
-    st.html(
-        """<script>
+    code = f"<script>{js}</script>"
+    try:
+        st.components.v1.html(code, height=0)
+    except Exception:
+        try:
+            st.html(code, unsafe_allow_javascript=True)
+        except Exception:
+            pass
+
+
+def _hide_streamlit_badge():
+    """Hide the Community Cloud 'Built with Streamlit' bar + Fullscreen link."""
+    _run_js(
+        """
         (function(){
           function scrub(d){ if(!d) return; try{
             d.querySelectorAll('a[href*="streamlit.io"],a[href*="streamlit.app"]').forEach(function(a){a.style.display='none';if(a.parentElement){a.parentElement.style.display='none';}});
             Array.prototype.forEach.call(d.querySelectorAll('button,a,span'),function(el){if(el.childElementCount===0){var t=(el.textContent||'').trim();if(t==='Fullscreen'||t==='Built with Streamlit'){var p=el.closest('div');if(p){p.style.display='none';}}}});
           }catch(e){} }
-          function kill(){ scrub(document); try{ if(window.parent&&window.parent!==window){ scrub(window.parent.document); } }catch(e){} }
-          setInterval(kill,400); kill();
+          function kill(){ try{ if(window.parent&&window.parent!==window){ scrub(window.parent.document); } }catch(e){} scrub(document); }
+          setInterval(kill,500); kill();
         })();
-        </script>""",
-        unsafe_allow_javascript=True,
+        """
     )
 
 
 def _scroll_to_bottom():
     """Scroll the view to the latest message (Streamlit doesn't auto-scroll)."""
-    st.html(
-        """<script>
+    _run_js(
+        """
         (function(){
-          function s(w){ try{ var d=w.document;
-            w.scrollTo(0, d.body.scrollHeight);
-            var m=d.querySelector('section.main'); if(m){ m.scrollTo(0, m.scrollHeight); }
-            var a=d.querySelector('[data-testid="stAppViewContainer"]'); if(a){ a.scrollTo(0, a.scrollHeight); }
+          var SEL=['[data-testid="stMain"]','[data-testid="stMainBlockContainer"]','section.main','[data-testid="stAppViewContainer"]','[data-testid="stAppScrollToBottomContainer"]'];
+          function bottom(d){ try{
+            var se=d.scrollingElement||d.documentElement; if(se){ se.scrollTop=se.scrollHeight; }
+            SEL.forEach(function(sel){ var el=d.querySelector(sel); if(el){ el.scrollTop=el.scrollHeight; } });
           }catch(e){} }
-          function go(){ s(window); try{ if(window.parent && window.parent!==window){ s(window.parent); } }catch(e){} }
-          go(); setTimeout(go, 150); setTimeout(go, 400);
+          function go(){ try{ if(window.parent&&window.parent!==window){ bottom(window.parent.document); } }catch(e){} bottom(document); }
+          go(); setTimeout(go,120); setTimeout(go,350); setTimeout(go,700);
         })();
-        </script>""",
-        unsafe_allow_javascript=True,
+        """
     )
 
 
