@@ -80,6 +80,7 @@ GUARD_MODEL = _get("GUARD_MODEL", "llama-guard-3-8b")
 USE_PRESIDIO = _get("USE_PRESIDIO", "0") == "1"             # production-grade PII engine
 LOGS_DIR = ROOT_DIR / "logs"
 TRACE_PATH = LOGS_DIR / "traces.jsonl"
+FEEDBACK_PATH = LOGS_DIR / "feedback.jsonl"
 
 # --- Branding (matched to drpranayjha.com) ---
 BRAND_NAME = "DrJhaGPT"

@@ -10,8 +10,8 @@ from functools import lru_cache
 
 import streamlit as st
 
-from chatbot import (auth, config, documents, guardrails, llm, observability,
-                     rag, retrieval)
+from chatbot import (auth, config, documents, feedback, guardrails, llm,
+                     observability, rag, retrieval)
 
 # ----------------------------------------------------------------------------- assets
 @lru_cache(maxsize=1)
@@ -212,8 +212,10 @@ def render_sidebar(user=None, roles=None):
         st.caption("Knowledge base: " + ("✅ loaded" if rag.has_knowledge() else "⚠️ not built"))
         if config.ENABLE_TRACING and roles and "admin" in roles:
             s = observability.summarize()
+            fb = feedback.summary()
             st.divider()
             st.caption(f"📊 Traces: {s.get('traces', 0)} · avg ms {s.get('avg_latency_ms', {})}")
+            st.caption(f"👍 {fb['up']} · 👎 {fb['down']} feedback")
 
         st.divider()
         st.markdown("**⚙ Options**")
@@ -229,6 +231,11 @@ def render_sidebar(user=None, roles=None):
         if _docs and st.button("Clear documents", use_container_width=True):
             st.session_state.pop("docs", None)
             st.rerun()
+
+        if st.session_state.get("messages"):
+            st.download_button("⬇ Export chat", data=_chat_markdown(),
+                               file_name="drjhagpt-chat.md", mime="text/markdown",
+                               use_container_width=True)
 
         if st.button("Clear conversation", use_container_width=True):
             st.session_state.messages = []
@@ -320,6 +327,49 @@ def render_doc_sources(hits):
     )
 
 
+def _record_feedback(idx, rating):
+    """Log a 👍/👎 on an assistant message (called via button on_click)."""
+    msgs = st.session_state.get("messages", [])
+    if not (0 <= idx < len(msgs)):
+        return
+    msgs[idx]["rating"] = rating
+    question = ""
+    for j in range(idx - 1, -1, -1):
+        if msgs[j]["role"] == "user":
+            question = msgs[j]["content"]
+            break
+    feedback.log({
+        "rating": rating,
+        "user": (st.session_state.get("dj_auth") or {}).get("username", "anonymous"),
+        "model": st.session_state.get("model"),
+        "question": guardrails.redact_pii(question),
+        "answer_preview": (msgs[idx].get("content") or "")[:300],
+        "sources": [s.get("url") for s in msgs[idx].get("sources", [])],
+    })
+
+
+def _render_feedback(msg, idx):
+    if msg.get("rating"):
+        st.caption("✓ Thanks — feedback recorded.")
+        return
+    c1, c2, _ = st.columns([1, 1, 10])
+    c1.button("👍", key=f"fb_up_{idx}", help="Helpful",
+              on_click=_record_feedback, args=(idx, "up"))
+    c2.button("👎", key=f"fb_down_{idx}", help="Not helpful",
+              on_click=_record_feedback, args=(idx, "down"))
+
+
+def _chat_markdown():
+    lines = ["# DrJhaGPT conversation\n"]
+    for m in st.session_state.get("messages", []):
+        who = "You" if m["role"] == "user" else "DrJhaGPT"
+        lines.append(f"**{who}:** {m['content']}\n")
+        for s in (m.get("sources") or []):
+            lines.append(f"> source: {s.get('title', '')} — {s.get('url', '')}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def pick_suggestion(question: str):
     st.session_state.pending = question
 
@@ -396,6 +446,7 @@ def main():
                     render_sources(msg["sources"])
                 if msg.get("doc_sources"):
                     render_doc_sources(msg["doc_sources"])
+                _render_feedback(msg, i)
 
     typed = st.chat_input("Ask Pranay anything about Intelligent Infrastructure…")
     prompt = typed or st.session_state.pop("pending", None)
@@ -443,9 +494,6 @@ def main():
             st.session_state.messages.pop()
             return
 
-        render_sources(results)
-        render_doc_sources(doc_hits)
-
         trace.set(mode=config.RETRIEVAL_MODE, model=st.session_state.get("model"),
                   n_sources=len(results), n_doc_hits=len(doc_hits),
                   sources=[r.get("url") for r in results], roles=roles)
@@ -454,6 +502,7 @@ def main():
     st.session_state.messages.append(
         {"role": "assistant", "content": answer, "sources": results, "doc_sources": doc_hits}
     )
+    st.rerun()
 
 
 if __name__ == "__main__":

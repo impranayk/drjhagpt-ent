@@ -145,7 +145,8 @@ self-hosted.
 — it's extracted, chunked, and embedded in-session (same vector space as the site
 index) and searched alongside it, so answers can draw from the document with page
 citations. A sidebar **model picker** switches the LLM per request
-(`AVAILABLE_MODELS`).
+(`AVAILABLE_MODELS`). Answers can be rated **👍/👎** (logged to
+`logs/feedback.jsonl` for the eval loop) and the conversation **exported** as Markdown.
 
 ---
 
@@ -199,6 +200,7 @@ chatbot/
   guardrails.py             Injection + PII + moderation             ← Phase 2
   observability.py          Per-request tracing → logs/traces.jsonl  ← Phase 2
   documents.py              PDF upload → chunk + embed (session)      ← Phase 2
+  feedback.py               👍/👎 ratings → logs/feedback.jsonl        ← Phase 2
 ingest/
   build_index.py            Pull site content → chunk → embed → index
 eval/

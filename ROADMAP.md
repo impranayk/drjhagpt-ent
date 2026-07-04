@@ -41,6 +41,8 @@ Highest return on effort, cheapest to add.
       moderation (`chatbot/guardrails.py`)
 - [x] **Observability** — per-request tracing of stage latencies, sources, and user, written
       to `logs/traces.jsonl` (`chatbot/observability.py`)
+- [x] **Feedback loop** — 👍/👎 per answer logged to `logs/feedback.jsonl` for evaluation;
+      plus PDF upload (chat with a doc), an in-UI model picker, and chat export
 - [x] **CI** — `pytest` suite + retrieval eval on every push (`.github/workflows/ci.yml`)
 - [x] **Containerize** — `Dockerfile` + `docker-compose.yml`
 - [x] Real **vector database** — **Qdrant** (local/embedded, no server); toggle `VECTOR_BACKEND=qdrant` (NumPy stays default). Managed/clustered Qdrant or pgvector next.

@@ -14,8 +14,8 @@ only free/open-source tools (no licenses):
 - **Phase 2** (partly shipped) — **login + roles** (bcrypt session auth),
   **guardrails** (prompt-injection block + PII redaction + optional Llama Guard),
   and **observability** (per-request tracing to `logs/traces.jsonl`).
-- **Interactive** — upload a **PDF** to chat with it (session-scoped), and a
-  **model picker** to switch LLMs on the fly.
+- **Interactive** — upload a **PDF** to chat with it, switch **LLMs** with a
+  picker, rate answers **👍/👎** (logged for the eval loop), and **export** the chat.
 
 See [ROADMAP.md](ROADMAP.md) for the full plan and target production architecture.
 Demo login → **`demo` / `demo1234`** (change before real use).
