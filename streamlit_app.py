@@ -94,6 +94,9 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .dj-rule { height: 1.5px; background: var(--accent); width: 100%; border: 0; margin: 14px 0 6px;
            border-radius: 0; }
 
+/* Frozen (sticky) header while the conversation scrolls under it */
+.st-key-dj_header { position: sticky; top: 0; z-index: 100; background: #ffffff; padding-top: .4rem; }
+
 /* ---- Chat messages ---- */
 [data-testid="stChatMessage"] { background: transparent; padding: .35rem 0; }
 [data-testid="stChatMessage"] p,
@@ -191,33 +194,34 @@ def clear_chat():
 
 
 def render_header():
-    if "mini" in st.query_params:
-        # Compact header for the floating widget (its own bar shows the brand).
-        _, right = st.columns([2, 1])
+    with st.container(key="dj_header"):
+        if "mini" in st.query_params:
+            # Compact header for the floating widget (its own bar shows the brand).
+            _, right = st.columns([2, 1])
+            with right:
+                st.button("↺  New chat", key="new_chat", on_click=clear_chat,
+                          use_container_width=True)
+            return
+        logo = logo_data_uri()
+        img = f'<img src="{logo}" alt="logo">' if logo else ""
+        left, right = st.columns([5, 1.4], vertical_alignment="center")
+        with left:
+            st.markdown(
+                f"""
+                <div class="dj-masthead">
+                  {img}
+                  <div class="dj-headtext">
+                    <h1 class="dj-title">DrJha<span class="accent">GPT</span></h1>
+                    <p class="dj-journal">{config.BRAND_EYEBROW}</p>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         with right:
             st.button("↺  New chat", key="new_chat", on_click=clear_chat,
                       use_container_width=True)
-        return
-    logo = logo_data_uri()
-    img = f'<img src="{logo}" alt="logo">' if logo else ""
-    left, right = st.columns([5, 1.4], vertical_alignment="center")
-    with left:
-        st.markdown(
-            f"""
-            <div class="dj-masthead">
-              {img}
-              <div class="dj-headtext">
-                <h1 class="dj-title">DrJha<span class="accent">GPT</span></h1>
-                <p class="dj-journal">{config.BRAND_EYEBROW}</p>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.button("↺  New chat", key="new_chat", on_click=clear_chat,
-                  use_container_width=True)
-    st.markdown('<hr class="dj-rule">', unsafe_allow_html=True)
+        st.markdown('<hr class="dj-rule">', unsafe_allow_html=True)
 
 
 def render_sidebar(user=None, roles=None):
