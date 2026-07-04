@@ -124,10 +124,11 @@ a larger golden set. The harness exists precisely to make that call with data.
 
 Layered on top of the retrieval core, each toggle-able via config:
 
-- **Auth (`chatbot/auth.py`)** — cookie-based login with bcrypt-hashed passwords and
-  per-user **roles** via `streamlit-authenticator`. The app is gated (no chat until
-  logged in). Demo: `demo` / `demo1234` in `.streamlit/auth.yaml`. Upgrade path:
-  Keycloak/Authentik for full OIDC/SAML SSO.
+- **Auth (`chatbot/auth.py`)** — session-based login with **bcrypt**-hashed passwords
+  and per-user **roles**, read from `.streamlit/auth.yaml`. Cookie-free (robust on any
+  host, including Streamlit Cloud) and fails to a login form, never open. The app is
+  gated — no chat until logged in. Demo: `demo` / `demo1234`. Upgrade path:
+  Keycloak/Authentik for OIDC/SAML SSO.
 - **Guardrails (`chatbot/guardrails.py`)** — before any model call, input is screened
   for **prompt-injection** (blocked if matched); **PII** is redacted (regex, or
   Microsoft **Presidio** if enabled) before it hits the logs; optional **moderation**
@@ -162,14 +163,14 @@ Structure-aware / parent-child chunking is a Phase 1 follow-up (see ROADMAP).
 
 | Concern | Choice |
 |---|---|
-| **LLM (generation)** | Meta **Llama 3.3 70B** (`llama-3.3-70b-versatile`) via **Groq** |
+| **LLM (generation)** | **Llama 3.3 70B** via **Groq** — or any self-hosted OpenAI-compatible endpoint (vLLM/Ollama/NIM) |
 | **Embeddings** | fastembed · `BAAI/bge-small-en-v1.5` (384-dim, ONNX) |
 | **Keyword search** | `rank-bm25` (BM25Okapi) |
 | **Fusion** | Reciprocal Rank Fusion |
 | **Reranker** | fastembed `TextCrossEncoder` · `ms-marco-MiniLM-L-6-v2` |
 | **Vector store** | in-memory NumPy (default) or **Qdrant** local/embedded (`VECTOR_BACKEND=qdrant`) |
 | **Evaluation** | golden set + hit@k / MRR harness |
-| **Auth** | streamlit-authenticator (login + roles) |
+| **Auth** | session-based bcrypt login + roles (Keycloak SSO as upgrade) |
 | **Guardrails** | injection heuristics + PII redaction + optional Groq Llama Guard |
 | **Observability** | local per-request tracing (`logs/traces.jsonl`) |
 | **UI** | Streamlit |
@@ -218,7 +219,9 @@ refreshed `data/` index if content changed → push. No secrets (public content)
 | Variable | Default | Purpose |
 |---|---|---|
 | `GROQ_API_KEY` | — | Free key from console.groq.com |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Open model via Groq |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Model when using Groq |
+| `LLM_PROVIDER` | `groq` | `groq` or `openai` (self-hosted endpoint) |
+| `LLM_BASE_URL` | — | OpenAI-compatible endpoint for on-prem/air-gap (vLLM/Ollama/NIM) |
 | `RAG_TOP_K` | `4` | Final snippets per question |
 | `RETRIEVAL_MODE` | `hybrid` | `dense` \| `hybrid` \| `hybrid_rerank` |
 | `RETRIEVE_CANDIDATES` | `40` | Fused candidates before rerank |

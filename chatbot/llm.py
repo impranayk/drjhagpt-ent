@@ -1,10 +1,9 @@
-"""Groq-backed generation using open-source models (Llama 3, Mixtral, ...).
+"""LLM generation via Groq (default) or any OpenAI-compatible endpoint.
 
-Replaces the original IBM Watson Machine Learning dependency.
+Set LLM_PROVIDER=openai (or LLM_BASE_URL) to use a self-hosted model server
+(vLLM / Ollama / NVIDIA NIM) for on-prem / air-gapped deployments.
 """
 from typing import Iterator, List, Dict
-
-from groq import Groq
 
 from . import config
 
@@ -23,12 +22,21 @@ SYSTEM_PROMPT = (
 )
 
 
-def _client() -> Groq:
+def _client():
+    """Groq by default, or any OpenAI-compatible endpoint (vLLM / Ollama / NIM)
+    when LLM_PROVIDER=openai or LLM_BASE_URL is set."""
+    if config.LLM_PROVIDER == "openai" or config.LLM_BASE_URL:
+        from openai import OpenAI
+
+        return OpenAI(base_url=config.LLM_BASE_URL or None,
+                      api_key=config.LLM_API_KEY or "not-needed")
     if not config.GROQ_API_KEY:
         raise RuntimeError(
-            "GROQ_API_KEY is not set. Copy .env.example to .env and add your "
-            "free key from https://console.groq.com/keys"
+            "No LLM configured. Set GROQ_API_KEY (https://console.groq.com/keys), "
+            "or LLM_BASE_URL for a self-hosted OpenAI-compatible endpoint."
         )
+    from groq import Groq
+
     return Groq(api_key=config.GROQ_API_KEY)
 
 
@@ -53,7 +61,7 @@ def stream_answer(question: str, context: str, history: List[Dict]) -> Iterator[
     """Yield the answer token-by-token for a live typing effect."""
     messages = build_messages(question, context, history)
     completion = _client().chat.completions.create(
-        model=config.GROQ_MODEL,
+        model=config.LLM_MODEL,
         messages=messages,
         temperature=0.3,
         max_tokens=1024,

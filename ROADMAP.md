@@ -36,7 +36,7 @@ Highest return on effort, cheapest to add.
 - [ ] Query rewriting + multi-query expansion
 
 ### Phase 2 — Hardening (partly shipped, all open-source)
-- [x] **Auth** — login + per-user roles via `streamlit-authenticator` (`chatbot/auth.py`)
+- [x] **Auth** — session-based bcrypt login + per-user roles (`chatbot/auth.py`; Keycloak SSO as upgrade)
 - [x] **Guardrails** — prompt-injection block + PII redaction + optional Groq **Llama Guard**
       moderation (`chatbot/guardrails.py`)
 - [x] **Observability** — per-request tracing of stage latencies, sources, and user, written

@@ -166,10 +166,10 @@ Rebuild it from **your** content:
 
 ## 10. Auth, vector DB, observability in production
 
-- **Auth** — the demo uses `streamlit-authenticator` (local users in
-  `.streamlit/auth.yaml`; change the cookie key and passwords via
-  `scripts/make_hash.py`). For real **SSO/RBAC**, front the app with **Keycloak**
-  or **Authentik** (OIDC) via `oauth2-proxy`, or Streamlit's native OIDC login.
+- **Auth** — the demo uses a session-based **bcrypt** login (local users in
+  `.streamlit/auth.yaml`; change passwords via `scripts/make_hash.py`). For real
+  **SSO/RBAC**, front the app with **Keycloak** or **Authentik** (OIDC) via
+  `oauth2-proxy`, or Streamlit's native OIDC login.
 - **Vector DB** — embedded Qdrant needs no server. For scale/HA run **Qdrant as a
   service** (container/cluster); connecting the app to a remote Qdrant is a small
   code hook (`QDRANT_URL`) that can be added.

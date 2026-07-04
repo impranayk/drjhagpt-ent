@@ -200,7 +200,7 @@ def render_sidebar(user=None, roles=None):
                    "cloud, datacenters & AI.")
         st.markdown(f"🌐 [drpranayjha.com]({config.WEBSITE_URL})")
         st.divider()
-        st.caption(f"Model: `{config.GROQ_MODEL}` · via Groq")
+        st.caption(f"Model: `{config.LLM_MODEL}` · via {config.LLM_PROVIDER}")
         st.caption(f"Retrieval: `{config.RETRIEVAL_MODE}`")
         st.caption("Knowledge base: " + ("✅ loaded" if rag.has_knowledge() else "⚠️ not built"))
         if config.ENABLE_TRACING and roles and "admin" in roles:
@@ -291,12 +291,12 @@ def main():
     render_sidebar(user, roles)
     render_header()
 
-    if not config.GROQ_API_KEY:
+    if not config.LLM_READY:
         st.warning(
-            "**Setup needed:** add your free Groq API key to run the assistant.\n\n"
-            "1. Get a key at https://console.groq.com/keys\n"
-            "2. Locally: copy `.env.example` to `.env` and paste the key.\n"
-            "3. On Streamlit Cloud: add `GROQ_API_KEY` in **Settings → Secrets**."
+            "**Setup needed:** configure an LLM.\n\n"
+            "- **Groq (default):** set `GROQ_API_KEY` (free at https://console.groq.com/keys).\n"
+            "- **Self-hosted:** set `LLM_BASE_URL` to your OpenAI-compatible endpoint "
+            "(vLLM / Ollama / NIM)."
         )
 
     if "messages" not in st.session_state:
@@ -333,8 +333,8 @@ def main():
         return
 
     with st.chat_message("assistant", avatar=logo_image()):
-        if not config.GROQ_API_KEY:
-            st.error("Add your Groq API key first (see the message above).")
+        if not config.LLM_READY:
+            st.error("Configure an LLM first (see the message above).")
             st.session_state.messages.pop()
             return
 

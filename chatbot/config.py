@@ -35,9 +35,17 @@ def _get(name: str, default: str = "") -> str:
     return default
 
 
-# --- LLM (Groq) ---
+# --- LLM (Groq by default; self-hosted OpenAI-compatible for on-prem / air-gap) ---
 GROQ_API_KEY = _get("GROQ_API_KEY")
 GROQ_MODEL = _get("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+# Provider: "groq" (default) or "openai" (any OpenAI-compatible endpoint:
+# vLLM / Ollama / NVIDIA NIM). Setting LLM_BASE_URL also selects the openai path.
+LLM_PROVIDER = _get("LLM_PROVIDER", "groq")
+LLM_BASE_URL = _get("LLM_BASE_URL", "")        # e.g. http://vllm:8000/v1
+LLM_API_KEY = _get("LLM_API_KEY", "")          # token for the self-hosted endpoint (if any)
+LLM_MODEL = _get("LLM_MODEL", GROQ_MODEL)      # model name for the chosen provider
+LLM_READY = bool(GROQ_API_KEY or LLM_BASE_URL)
 
 # --- Retrieval / RAG ---
 EMBED_MODEL = _get("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
