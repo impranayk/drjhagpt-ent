@@ -147,10 +147,31 @@ div[data-testid="stButton"] > button:hover {
 [data-testid="stChatInputSubmitButton"]:hover { background: var(--accent-dark) !important; }
 [data-testid="stChatInputSubmitButton"] svg { color: #fff !important; fill: #fff !important; }
 
-/* ---- Sidebar ---- */
-[data-testid="stSidebar"] { background: var(--panel); border-right: 1px solid var(--border); }
+/* ---- Branded sidebar ---- */
+[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid var(--border); }
+.dj-sb-brand { display: flex; align-items: center; gap: 10px; }
+.dj-sb-brand img { width: 36px; height: 36px; border-radius: 8px; border: 2px solid var(--accent); }
+.dj-sb-title { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 21px; color: var(--ink); line-height: 1; }
+.dj-sb-title span { color: var(--accent); }
+.dj-sb-sub { font-family: 'Inter', sans-serif; font-style: italic; color: var(--accent); font-size: 10.5px; margin-top: 2px; }
+.dj-sb-rule { height: 2px; background: var(--accent); border: 0; margin: 10px 0 12px; width: 100%; }
+.dj-sb-label { font-family: 'Oswald', sans-serif; color: var(--accent); font-size: 10.5px; letter-spacing: 2px;
+  font-weight: 600; text-transform: uppercase; margin: 16px 0 7px; }
+.dj-sb-user { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 11px; margin-bottom: 8px; font-size: 13px; color: var(--ink); }
+.dj-sb-user b { font-weight: 700; }
+.dj-sb-badge { background: var(--accent); color: #fff; font-size: 9px; font-weight: 600; letter-spacing: .5px;
+  text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-left: auto; }
+.dj-sb-status { font-size: 12px; color: var(--muted); line-height: 1.9; }
+.dj-sb-status b { color: var(--ink); font-weight: 600; }
+.dj-sb-status a { color: var(--accent); text-decoration: none; }
 
-/* ---- Options: model picker + PDF uploader ---- */
+/* Sidebar buttons: centered + consistent */
+[data-testid="stSidebar"] div[data-testid="stButton"] > button,
+[data-testid="stSidebar"] div[data-testid="stDownloadButton"] > button {
+  text-align: center !important; border-radius: 8px !important; }
+
+/* Model picker + PDF uploader (brand accents) */
 [data-testid="stFileUploaderDropzone"] { border: 1.5px dashed var(--accent) !important;
   background: #fff !important; border-radius: 10px !important; }
 [data-baseweb="select"] > div:focus-within { border-color: var(--accent) !important;
@@ -199,26 +220,48 @@ def render_header():
 
 def render_sidebar(user=None, roles=None):
     with st.sidebar:
-        st.markdown(f"### {config.BRAND_NAME}")
+        logo = logo_data_uri()
+        img = f'<img src="{logo}" alt="">' if logo else ""
+        st.markdown(
+            f'<div class="dj-sb-brand">{img}<div>'
+            f'<div class="dj-sb-title">DrJha<span>GPT</span></div>'
+            f'<div class="dj-sb-sub">{config.BRAND_EYEBROW}</div></div></div>'
+            '<hr class="dj-sb-rule">',
+            unsafe_allow_html=True,
+        )
+
         if config.ENABLE_AUTH and user:
-            st.caption(f"Signed in as **{user}**" + (f" · {', '.join(roles)}" if roles else ""))
+            role = (roles or ["user"])[0]
+            st.markdown(
+                f'<div class="dj-sb-user">👤 <b>{user}</b>'
+                f'<span class="dj-sb-badge">{role}</span></div>',
+                unsafe_allow_html=True,
+            )
             auth.render_logout()
-        st.caption("Grounded in Dr. Pranay Jha's published work on VMware, "
-                   "cloud, datacenters & AI.")
-        st.markdown(f"🌐 [drpranayjha.com]({config.WEBSITE_URL})")
-        st.divider()
-        st.caption(f"Model: `{config.LLM_MODEL}` · via {config.LLM_PROVIDER}")
-        st.caption(f"Retrieval: `{config.RETRIEVAL_MODE}`")
-        st.caption("Knowledge base: " + ("✅ loaded" if rag.has_knowledge() else "⚠️ not built"))
+
+        kb = rag.has_knowledge()
+        st.markdown('<div class="dj-sb-label">Status</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="dj-sb-status">'
+            f'Model &nbsp; <b>{config.LLM_MODEL}</b><br>'
+            f'Retrieval &nbsp; <b>{config.RETRIEVAL_MODE}</b><br>'
+            f'Knowledge base &nbsp; <b>{"loaded" if kb else "not built"}</b> {"✅" if kb else "⚠️"}<br>'
+            f'🌐 <a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com</a>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
         if config.ENABLE_TRACING and roles and "admin" in roles:
             s = observability.summarize()
             fb = feedback.summary()
-            st.divider()
-            st.caption(f"📊 Traces: {s.get('traces', 0)} · avg ms {s.get('avg_latency_ms', {})}")
-            st.caption(f"👍 {fb['up']} · 👎 {fb['down']} feedback")
+            st.markdown('<div class="dj-sb-label">Metrics</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="dj-sb-status">📊 <b>{s.get("traces", 0)}</b> traces<br>'
+                f'👍 <b>{fb["up"]}</b> · 👎 <b>{fb["down"]}</b> feedback</div>',
+                unsafe_allow_html=True,
+            )
 
-        st.divider()
-        st.markdown("**⚙ Options**")
+        st.markdown('<div class="dj-sb-label">Options</div>', unsafe_allow_html=True)
         _opts = list(dict.fromkeys([config.LLM_MODEL] + config.AVAILABLE_MODELS))
         _cur = st.session_state.get("model", config.LLM_MODEL)
         st.session_state["model"] = st.selectbox(
