@@ -18,6 +18,8 @@ only free/open-source tools (no licenses):
 See [ROADMAP.md](ROADMAP.md) for the full plan and target production architecture.
 Demo login → **`demo` / `demo1234`** (change before real use).
 
+🏢 **Deploying on-prem / in your datacenter (incl. air-gapped)?** → **[DEPLOYMENT.md](DEPLOYMENT.md)**
+
 A fully **open-source, free-to-run** stack — no proprietary AI services.
 
 ## Architecture at a glance
