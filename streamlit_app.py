@@ -42,7 +42,7 @@ SUGGESTIONS = [
 ]
 
 st.set_page_config(
-    page_title=config.BRAND_NAME,
+    page_title=config.BRAND_FULL,
     page_icon=logo_image(),
     layout="centered",
     initial_sidebar_state="expanded",   # show Options (model picker + PDF upload) by default
@@ -87,6 +87,9 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
             font-weight: 700; letter-spacing: .3px; line-height: .95 !important;
             margin: 0 !important; padding: 0 !important; white-space: nowrap; }
 .dj-title .accent { color: var(--accent); }
+.dj-pro { font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+          color: #fff; background: var(--accent); padding: 2px 6px; border-radius: 6px;
+          vertical-align: middle; margin-left: 8px; position: relative; top: -3px; }
 .dj-journal { font-family: 'Inter', sans-serif; font-style: italic; color: var(--accent);
               font-size: clamp(10px, 3vw, 11px); font-weight: 500; letter-spacing: .2px;
               line-height: 1.2; margin: 4px 0 0 !important; padding: 0 !important;
@@ -103,6 +106,35 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
   position: sticky !important; top: 0 !important; z-index: 100;
   background: #ffffff; padding-top: .4rem;
 }
+
+/* ---- Login card (branded sign-in) ---- */
+.st-key-dj_login_card { max-width: 430px; margin: 5vh auto 0; background: #ffffff;
+  border: 1px solid var(--border); border-radius: 16px; padding: 30px 30px 22px;
+  box-shadow: 0 12px 34px rgba(20,22,24,.07); }
+.dj-login-head { display: flex; align-items: center; gap: 14px; }
+.dj-login-logo { width: 46px; height: 46px; border-radius: 11px; border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.10); }
+.dj-login-word { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 26px;
+  letter-spacing: .3px; line-height: 1; color: var(--ink); }
+.dj-login-word .accent { color: var(--accent); }
+.dj-login-pro { font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  color: #fff; background: var(--accent); padding: 2px 6px; border-radius: 6px; margin-left: 6px;
+  position: relative; top: -3px; }
+.dj-login-eyebrow { font-family: 'Inter', sans-serif; font-style: italic; color: var(--accent);
+  font-size: 11px; font-weight: 500; margin-top: 5px; }
+.dj-login-rule { height: 1.5px; background: var(--accent); border: 0; margin: 18px 0 14px; }
+.dj-login-title { font-family: 'Oswald', sans-serif; font-size: 19px; font-weight: 600; color: var(--ink);
+  letter-spacing: .2px; }
+.dj-login-sub { color: var(--muted); font-size: 13px; margin: 3px 0 2px; }
+.dj-login-foot { color: var(--muted); font-size: 12px; text-align: center; margin-top: 16px; }
+.dj-login-foot a { color: var(--accent); text-decoration: none; }
+/* Strip the form's default frame (the card is the frame) + brand the inputs/button */
+.st-key-dj_login_card [data-testid="stForm"] { border: 0 !important; padding: 0 !important; }
+.st-key-dj_login_card [data-baseweb="input"] { border-radius: 9px !important; }
+.st-key-dj_login_card [data-testid="stForm"] button {
+  background: var(--accent) !important; color: #fff !important; border: 0 !important;
+  border-radius: 9px !important; font-weight: 600 !important; letter-spacing: .2px; padding: .55rem 1rem !important; }
+.st-key-dj_login_card [data-testid="stForm"] button:hover { background: var(--accent-dark) !important; }
 
 /* Compact the frozen header on small screens so it steals less vertical room */
 @media (max-width: 640px) {
@@ -228,7 +260,7 @@ def render_header():
                 <div class="dj-masthead">
                   {img}
                   <div class="dj-headtext">
-                    <h1 class="dj-title">DrJha<span class="accent">GPT</span></h1>
+                    <h1 class="dj-title">DrJha<span class="accent">GPT</span><span class="dj-pro">PRO</span></h1>
                     <p class="dj-journal">{config.BRAND_EYEBROW}</p>
                   </div>
                 </div>

@@ -85,6 +85,8 @@ FEEDBACK_PATH = LOGS_DIR / "feedback.jsonl"
 
 # --- Branding (matched to drpranayjha.com) ---
 BRAND_NAME = "DrJhaGPT"
+BRAND_EDITION = "Pro"                                  # production-hardened edition
+BRAND_FULL = f"{BRAND_NAME} {BRAND_EDITION}"           # "DrJhaGPT Pro"
 BRAND_EYEBROW = "Journal of Intelligent Infrastructure"
 BRAND_TAGLINE = "Ask Dr. Pranay Jha anything — answered from his published work on VMware, Cloud & AI."
 WEBSITE_URL = "https://drpranayjha.com"
