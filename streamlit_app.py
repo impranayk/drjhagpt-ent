@@ -243,7 +243,6 @@ def render_sidebar(user=None, roles=None):
         st.markdown('<div class="dj-sb-label">Status</div>', unsafe_allow_html=True)
         st.markdown(
             f'<div class="dj-sb-status">'
-            f'Model &nbsp; <b>{config.LLM_MODEL}</b><br>'
             f'Retrieval &nbsp; <b>{config.RETRIEVAL_MODE}</b><br>'
             f'Knowledge base &nbsp; <b>{"loaded" if kb else "not built"}</b> {"✅" if kb else "⚠️"}<br>'
             f'🌐 <a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com</a>'
@@ -452,6 +451,24 @@ def _hide_streamlit_badge():
     )
 
 
+def _scroll_to_bottom():
+    """Scroll the view to the latest message (Streamlit doesn't auto-scroll)."""
+    st.html(
+        """<script>
+        (function(){
+          function s(w){ try{ var d=w.document;
+            w.scrollTo(0, d.body.scrollHeight);
+            var m=d.querySelector('section.main'); if(m){ m.scrollTo(0, m.scrollHeight); }
+            var a=d.querySelector('[data-testid="stAppViewContainer"]'); if(a){ a.scrollTo(0, a.scrollHeight); }
+          }catch(e){} }
+          function go(){ s(window); try{ if(window.parent && window.parent!==window){ s(window.parent); } }catch(e){} }
+          go(); setTimeout(go, 150); setTimeout(go, 400);
+        })();
+        </script>""",
+        unsafe_allow_javascript=True,
+    )
+
+
 def main():
     _hide_streamlit_badge()
 
@@ -490,6 +507,9 @@ def main():
                 if msg.get("doc_sources"):
                     render_doc_sources(msg["doc_sources"])
                 _render_feedback(msg, i)
+
+    if st.session_state.pop("_scroll", False):
+        _scroll_to_bottom()
 
     typed = st.chat_input("Ask Pranay anything about Intelligent Infrastructure…")
     prompt = typed or st.session_state.pop("pending", None)
@@ -545,6 +565,7 @@ def main():
     st.session_state.messages.append(
         {"role": "assistant", "content": answer, "sources": results, "doc_sources": doc_hits}
     )
+    st.session_state["_scroll"] = True
     st.rerun()
 
 
