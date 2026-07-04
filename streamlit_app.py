@@ -160,6 +160,8 @@ div[data-testid="stButton"] > button:hover {
 .dj-sb-user { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
   border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 11px; margin-bottom: 8px; font-size: 13px; color: var(--ink); }
 .dj-sb-user b { font-weight: 700; }
+.dj-sb-ava { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex: 0 0 auto; }
 .dj-sb-badge { background: var(--accent); color: #fff; font-size: 9px; font-weight: 600; letter-spacing: .5px;
   text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-left: auto; }
 .dj-sb-status { font-size: 12px; color: var(--muted); line-height: 1.9; }
@@ -233,19 +235,22 @@ def render_sidebar(user=None, roles=None):
         if config.ENABLE_AUTH and user:
             role = (roles or ["user"])[0]
             st.markdown(
-                f'<div class="dj-sb-user">👤 <b>{user}</b>'
-                f'<span class="dj-sb-badge">{role}</span></div>',
+                f'<div class="dj-sb-user"><span class="dj-sb-ava">{(user or "?")[:1].upper()}</span>'
+                f'<b>{user}</b><span class="dj-sb-badge">{role}</span></div>',
                 unsafe_allow_html=True,
             )
             auth.render_logout()
 
         kb = rag.has_knowledge()
         st.markdown('<div class="dj-sb-label">Status</div>', unsafe_allow_html=True)
+        dot_color = "#15935a" if kb else "#c99a00"
         st.markdown(
             f'<div class="dj-sb-status">'
             f'Retrieval &nbsp; <b>{config.RETRIEVAL_MODE}</b><br>'
-            f'Knowledge base &nbsp; <b>{"loaded" if kb else "not built"}</b> {"✅" if kb else "⚠️"}<br>'
-            f'🌐 <a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com</a>'
+            f'Knowledge base &nbsp; <b>{"loaded" if kb else "not built"}</b>'
+            f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
+            f'background:{dot_color};vertical-align:middle;margin-left:5px"></span><br>'
+            f'<a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com&nbsp;↗</a>'
             '</div>',
             unsafe_allow_html=True,
         )
