@@ -97,6 +97,16 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 /* Frozen (sticky) header while the conversation scrolls under it */
 .st-key-dj_header { position: sticky; top: 0; z-index: 100; background: #ffffff; padding-top: .4rem; }
 
+/* Compact the frozen header on small screens so it steals less vertical room */
+@media (max-width: 640px) {
+  .st-key-dj_header { padding-top: .15rem; }
+  .dj-masthead { gap: 10px; }
+  .dj-masthead img { width: 34px !important; height: 34px !important; border-radius: 9px; }
+  .dj-title { font-size: 20px; }
+  .dj-journal { display: none; }
+  .dj-rule { margin: 7px 0 3px; }
+}
+
 /* ---- Chat messages ---- */
 [data-testid="stChatMessage"] { background: transparent; padding: .35rem 0; }
 [data-testid="stChatMessage"] p,
