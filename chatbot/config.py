@@ -36,7 +36,8 @@ def _get(name: str, default: str = "") -> str:
 
 
 # --- LLM (Groq by default; self-hosted OpenAI-compatible for on-prem / air-gap) ---
-GROQ_API_KEY = _get("GROQ_API_KEY")
+GROQ_API_KEY = _get("GROQ_API_KEY")        # one key, or several comma-separated
+GROQ_API_KEY2 = _get("GROQ_API_KEY2", "")  # optional 2nd-account key for failover
 GROQ_MODEL = _get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # Provider: "groq" (default) or "openai" (any OpenAI-compatible endpoint:

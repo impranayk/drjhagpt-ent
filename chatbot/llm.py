@@ -23,22 +23,52 @@ SYSTEM_PROMPT = (
 )
 
 
-def _client():
-    """Groq by default, or any OpenAI-compatible endpoint (vLLM / Ollama / NIM)
-    when LLM_PROVIDER=openai or LLM_BASE_URL is set."""
+def _groq_keys():
+    keys = []
+    for v in (config.GROQ_API_KEY, config.GROQ_API_KEY2):
+        keys += [k.strip() for k in (v or "").split(",") if k.strip()]
+    seen, out = set(), []
+    for k in keys:
+        if k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def _is_rate_limit(exc) -> bool:
+    s = str(exc).lower()
+    return ("rate_limit" in s or "429" in s or "tokens per day" in s
+            or getattr(exc, "status_code", None) == 429)
+
+
+def _create(**kw):
+    """One completion. Uses the self-hosted OpenAI endpoint if configured;
+    otherwise Groq with automatic key failover on a daily/rate limit."""
     if config.LLM_PROVIDER == "openai" or config.LLM_BASE_URL:
         from openai import OpenAI
 
-        return OpenAI(base_url=config.LLM_BASE_URL or None,
-                      api_key=config.LLM_API_KEY or "not-needed")
-    if not config.GROQ_API_KEY:
+        client = OpenAI(base_url=config.LLM_BASE_URL or None,
+                        api_key=config.LLM_API_KEY or "not-needed")
+        return client.chat.completions.create(**kw)
+
+    keys = _groq_keys()
+    if not keys:
         raise RuntimeError(
             "No LLM configured. Set GROQ_API_KEY (https://console.groq.com/keys), "
             "or LLM_BASE_URL for a self-hosted OpenAI-compatible endpoint."
         )
     from groq import Groq
 
-    return Groq(api_key=config.GROQ_API_KEY)
+    last = None
+    for i, key in enumerate(keys):
+        try:
+            return Groq(api_key=key).chat.completions.create(**kw)
+        except Exception as exc:
+            last = exc
+            if _is_rate_limit(exc) and i < len(keys) - 1:
+                continue
+            raise
+    raise last
 
 
 def build_messages(question: str, context: str, history: List[Dict]) -> List[Dict]:
@@ -62,7 +92,7 @@ def stream_answer(question: str, context: str, history: List[Dict],
                   model: str = None) -> Iterator[str]:
     """Yield the answer token-by-token for a live typing effect."""
     messages = build_messages(question, context, history)
-    completion = _client().chat.completions.create(
+    completion = _create(
         model=model or config.LLM_MODEL,
         messages=messages,
         temperature=0.3,
