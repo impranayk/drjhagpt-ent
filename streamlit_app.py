@@ -68,7 +68,7 @@ html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif; color: va
 [data-testid="stStatusWidget"], [data-testid="stAppViewerBadge"],
 [data-testid="stAppDeployButton"],
 [class*="viewerBadge"], [class*="_viewerBadge"], [class*="ViewerBadge"],
-[class*="_profileContainer"], [class*="profileContainer"],
+[class*="_profileContainer"], [class*="profileContainer"], [data-testid="InputInstructions"],
 a[href*="streamlit.io"], a[href*="streamlit.app"] { display: none !important; }
 header[data-testid="stHeader"] { background: transparent; height: 0; }
 /* Breathing room above the New chat button (esp. in the narrow widget) */
