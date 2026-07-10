@@ -248,14 +248,10 @@ refreshed `data/` index if content changed → push. No secrets (public content)
 ## 10. Uptime (free-tier keep-alive)
 
 The demo runs on Streamlit Community Cloud, whose free tier sleeps an app after
-inactivity. To keep it warm, two lightweight pingers hit it on a schedule:
-
-- **GitHub Action** — `.github/workflows/keep-awake.yml` loads the app roughly
-  every 10 minutes (a cookie-jar `curl` so Streamlit's redirect handshake resolves
-  to a `200`), with a manual "Run workflow" button too.
-- **[cron-job.org](https://cron-job.org)** — an external uptime monitor pings the
-  app every 5 minutes; more reliable than GitHub's scheduled runs, which can be
-  delayed. Demo: <https://drjhagpt-ent.streamlit.app>
+inactivity. To keep it warm, an external **[cron-job.org](https://cron-job.org)**
+uptime monitor pings the app every 5 minutes (with "follow/accept redirects" on,
+so Streamlit's `303` session handshake counts as success).
+Demo: <https://drjhagpt-ent.streamlit.app>
 
 For a production deployment that must never sleep, host on an always-on target
 (VPS / Kubernetes) per **[DEPLOYMENT.md](DEPLOYMENT.md)**.
