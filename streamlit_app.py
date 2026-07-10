@@ -303,7 +303,7 @@ def render_sidebar(user=None, roles=None):
             f'Knowledge base &nbsp; <b>{"loaded" if kb else "not built"}</b>'
             f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
             f'background:{dot_color};vertical-align:middle;margin-left:5px"></span><br>'
-            f'<a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com&nbsp;↗</a>'
+            f'<a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 16 16 8"/><path d="M9 8h7v7"/></svg></a>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -356,7 +356,7 @@ def render_sources(results):
             cards.append(
                 f'<a class="dj-source" href="{link}" target="_blank">'
                 f'<span class="dj-source-title">{title}</span>'
-                f'<span class="dj-source-host">drpranayjha.com ↗</span></a>'
+                f'<span class="dj-source-host">drpranayjha.com <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 16 16 8"/><path d="M9 8h7v7"/></svg></span></a>'
             )
     if cards:
         st.markdown(
