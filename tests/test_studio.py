@@ -160,6 +160,17 @@ def test_lead_only_and_associate_rules_are_disjointly_enforced(monkeypatch):
     assert "ask" in allowed and "lab" in allowed
 
 
+def test_tables_are_prefixed_so_a_project_can_be_shared():
+    """Generic names would collide with a sibling app in the same Supabase
+    project, and `create table if not exists` fails silently when they do."""
+    from chatbot import store
+
+    for logical in ("app_users", "events", "access_requests", "library", "tracks"):
+        assert store.table_name(logical) == "dj_" + logical
+    # Applying the prefix twice would point at a table that doesn't exist.
+    assert store.table_name("dj_library") == "dj_library"
+
+
 def test_admin_sees_every_tool(monkeypatch):
     import chatbot.auth as auth
 

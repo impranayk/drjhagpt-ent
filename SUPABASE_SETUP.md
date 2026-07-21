@@ -22,13 +22,28 @@ It takes about ten minutes and costs nothing on Supabase's free tier.
    you — `ap-south-1` if you're in India).
 2. Wait for it to finish provisioning.
 
+**A new project, or reuse an existing one?** A separate project is cleaner:
+independent backups, independent quota, and no chance of one app's traffic
+affecting another. But Supabase's free tier caps how many active projects an
+organisation can have, so if you are at the limit, **reusing an existing project
+is safe** — every table here is prefixed `dj_`, so it cannot collide with another
+app's `app_users` or `events`. Just point `SUPABASE_URL` / `SUPABASE_KEY` at the
+project you're reusing and run the SQL below in it.
+
 ## 2. Run the SQL
 
 Open **SQL Editor → New query**, paste all of this, and run it.
 
+> Every table is prefixed **`dj_`** on purpose. Names like `app_users`, `events`
+> and `access_requests` are exactly what another app would also choose — and
+> `create table if not exists` against an existing one silently does nothing,
+> which would leave two apps reading each other's people. The prefix means this
+> app can safely share a project with, say, a Neevalay one. If you change
+> `DB_PREFIX`, change it here too.
+
 ```sql
 -- Tracks: the practice a trainer belongs to, and the unit material is shared to.
-create table if not exists tracks (
+create table if not exists dj_tracks (
   code        text primary key,
   name        text not null,
   focus       text,
@@ -37,12 +52,12 @@ create table if not exists tracks (
 );
 
 -- People. `password_hash` is a bcrypt hash written by the app - never a password.
-create table if not exists app_users (
+create table if not exists dj_app_users (
   username              text primary key,
   name                  text not null,
   password_hash         text not null,
   role                  text not null default 'trainer',
-  track_code            text references tracks(code),
+  track_code            text references dj_tracks(code),
   can_share_all         boolean not null default false,
   active                boolean not null default true,
   email                 text,
@@ -54,11 +69,11 @@ create table if not exists app_users (
   must_change_password  boolean not null default true,
   created_at            timestamptz not null default now()
 );
-create unique index if not exists app_users_email_key
-  on app_users (lower(email)) where email is not null;
+create unique index if not exists dj_app_users_email_key
+  on dj_app_users (lower(email)) where email is not null;
 
 -- The shared library of published material.
-create table if not exists library (
+create table if not exists dj_library (
   id               bigserial primary key,
   created_at       timestamptz not null default now(),
   author           text not null,
@@ -75,10 +90,10 @@ create table if not exists library (
   meeting          text,
   status           text not null default 'published'
 );
-create index if not exists library_created_idx on library (created_at desc);
+create index if not exists dj_library_created_idx on dj_library (created_at desc);
 
 -- Self-serve access requests, reviewed in the Admin Console.
-create table if not exists access_requests (
+create table if not exists dj_access_requests (
   id          bigserial primary key,
   created_at  timestamptz not null default now(),
   name        text not null,
@@ -93,7 +108,7 @@ create table if not exists access_requests (
 );
 
 -- Audit log.
-create table if not exists events (
+create table if not exists dj_events (
   id          bigserial primary key,
   created_at  timestamptz not null default now(),
   actor       text not null,
@@ -101,18 +116,18 @@ create table if not exists events (
   detail      text,
   track       text
 );
-create index if not exists events_created_idx on events (created_at desc);
+create index if not exists dj_events_created_idx on dj_events (created_at desc);
 
 -- The app talks to PostgREST with the service_role key, which bypasses RLS.
 -- RLS is still enabled so that a leaked anon/publishable key reads nothing.
-alter table tracks           enable row level security;
-alter table app_users        enable row level security;
-alter table library          enable row level security;
-alter table access_requests  enable row level security;
-alter table events           enable row level security;
+alter table dj_tracks           enable row level security;
+alter table dj_app_users        enable row level security;
+alter table dj_library          enable row level security;
+alter table dj_access_requests  enable row level security;
+alter table dj_events           enable row level security;
 
 -- Seed your tracks (edit to match how you actually organise your training).
-insert into tracks (code, name, focus) values
+insert into dj_tracks (code, name, focus) values
   ('VMW', 'VMware & Private Cloud', 'vSphere, VCF, vSAN, NSX'),
   ('CLD', 'Public Cloud',           'AWS, Azure, GCP'),
   ('K8S', 'Kubernetes & Containers','Kubernetes, OpenShift, Docker'),

@@ -4,17 +4,20 @@ Entirely optional. With SUPABASE_URL / SUPABASE_KEY unset, `enabled()` is False:
 the studio runs as a single-trainer tool, logins fall back to
 `.streamlit/auth.yaml`, and the Library / Admin Console simply don't appear.
 
-Tables (SQL in SUPABASE_SETUP.md):
-    tracks(code, name, focus, active)
-    app_users(username, name, password_hash, role, track_code, can_share_all,
-              active, email, mobile, photo, auth_sub, allowed_tools,
-              allowed_models, must_change_password)
-    library(id, created_at, author, tool, title, content_md, tracks jsonb,
-            course, cohort, tech_area, product_version, tags, attachment_url,
-            meeting, status)
-    access_requests(id, created_at, name, email, username, role, track_code,
-                    note, status, decided_by, decided_at)
-    events(id, created_at, actor, action, detail, track)
+Tables (SQL in SUPABASE_SETUP.md). Every name is prefixed with `config.DB_PREFIX`
+(default `dj_`) so this app can share a Supabase project with another one without
+fighting over generic names like `app_users` or `events`:
+
+    dj_tracks(code, name, focus, active)
+    dj_app_users(username, name, password_hash, role, track_code, can_share_all,
+                 active, email, mobile, photo, auth_sub, allowed_tools,
+                 allowed_models, must_change_password)
+    dj_library(id, created_at, author, tool, title, content_md, tracks jsonb,
+               course, cohort, tech_area, product_version, tags, attachment_url,
+               meeting, status)
+    dj_access_requests(id, created_at, name, email, username, role, track_code,
+                       note, status, decided_by, decided_at)
+    dj_events(id, created_at, actor, action, detail, track)
 """
 from typing import List, Optional
 
@@ -33,8 +36,14 @@ def _headers() -> dict:
     }
 
 
+def table_name(table: str) -> str:
+    """The physical table name for a logical one ('library' -> 'dj_library')."""
+    prefix = config.DB_PREFIX or ""
+    return table if table.startswith(prefix) else prefix + table
+
+
 def _rest(table: str) -> str:
-    return f"{config.SUPABASE_URL.rstrip('/')}/rest/v1/{table}"
+    return f"{config.SUPABASE_URL.rstrip('/')}/rest/v1/{table_name(table)}"
 
 
 def _get(table, params):

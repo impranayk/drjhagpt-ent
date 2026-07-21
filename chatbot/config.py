@@ -133,6 +133,14 @@ SUPABASE_URL = _get("SUPABASE_URL", "")
 SUPABASE_KEY = _get("SUPABASE_KEY", "")     # service_role key (server-side secret only)
 LIBRARY_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY)
 
+# Every table this app owns is prefixed, so a Supabase project can be SHARED with
+# another app without collisions. Generic names like `app_users`, `events` and
+# `access_requests` are exactly what a sibling project would also pick - and a
+# `create table if not exists` against an existing one silently does nothing,
+# leaving two apps reading each other's people. The prefix makes that impossible.
+# Only change it before first setup; the SQL in SUPABASE_SETUP.md must match.
+DB_PREFIX = _get("DB_PREFIX", "dj_")
+
 # Pluggable auth backend. "local" = built-in bcrypt logins (DB first, then
 # auth.yaml). Set to "sso" later without touching the rest of the app.
 AUTH_PROVIDER = _get("AUTH_PROVIDER", "local")
