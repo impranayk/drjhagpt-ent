@@ -1,21 +1,58 @@
 # DrJhaGPT Pro
 
-**GenAI for Intelligent Infrastructure — the production-hardened (Pro) edition.**
+**Studio for Technical Training — GenAI for Intelligent Infrastructure.**
 
-An open-source RAG (Retrieval-Augmented Generation) chatbot that answers
-questions about **VMware, cloud, datacenters, and AI** using Dr. Pranay Jha's
-published work at [drpranayjha.com](https://drpranayjha.com).
+A task studio for building and delivering technical training on **VMware, cloud,
+Kubernetes, automation and AI infrastructure** — grounded in Dr. Pranay Jha's
+published work at [drpranayjha.com](https://drpranayjha.com) and in any PDF you
+upload (release notes, an admin guide, an exam blueprint).
 
-This repo evolves the base assistant toward an **enterprise-grade** system, using
-only free/open-source tools (no licenses):
+Pick a tool, fill a short form, get a branded document you can refine, print,
+export to Word, or publish to your team.
 
-- **Phase 1** — hybrid retrieval (dense + BM25 via Reciprocal Rank Fusion),
-  cross-encoder **reranking**, and an **evaluation harness**.
-- **Phase 2** (partly shipped) — **login + roles** (bcrypt session auth),
+### The tools
+
+| | |
+|---|---|
+| **Plan & teach** | Course Outline · Session Plan · Slide Outline · Architecture Diagram · Concept Explainer |
+| **Hands-on** | Lab Guide · Demo Runbook · Troubleshooting Scenario |
+| **Practice & assess** | Quiz Builder · Flashcards · Certification Study Plan |
+| **Code & config** | Script Studio · Code Explainer · Cheat Sheet |
+| **Deliver & publish** | Student Handout · Runbook / SOP · Article Draft · Trainer Comms |
+| **Ask** | The original grounded RAG chat, over your site and your PDFs |
+
+### What makes the output usable
+
+- **Grounding** — any generator can retrieve from your published work and/or an
+  uploaded PDF, so the material follows your own positions and terminology.
+- **Version-aware** — every form takes a product version, stated explicitly in
+  the prompt, so you don't get answers written for the wrong release.
+- **Honest about uncertainty** — the model is instructed to append `[verify]`
+  rather than invent a command flag, default or product capability.
+- **Real diagrams** — the Architecture Diagram tool emits Mermaid, rendered live
+  in the app and in the exported file, with a repair pass that fixes the syntax
+  mistakes models reliably make.
+- **Export that fits the job** — Word, Print/PDF, Markdown, copy-just-the-code,
+  and CSV straight into Anki for flashcards.
+
+### Working as a team (optional)
+
+Add Supabase and the studio gains roles (Admin / Lead Trainer / Trainer /
+Associate), tracks, a **shared library** of published material, self-serve access
+requests and an audit log — see **[SUPABASE_SETUP.md](SUPABASE_SETUP.md)**.
+Without it, everything above still works for a single trainer.
+
+### Under the hood
+
+Only free/open-source tools, no licenses:
+
+- **Hybrid retrieval** — dense vectors + BM25 fused with Reciprocal Rank Fusion,
+  optional cross-encoder reranking, with an evaluation harness.
+- **Login + roles** (bcrypt session auth, database-first with a file fallback),
   **guardrails** (prompt-injection block + PII redaction + optional Llama Guard),
-  and **observability** (per-request tracing to `logs/traces.jsonl`).
-- **Interactive** — upload a **PDF** to chat with it, switch **LLMs** with a
-  picker, rate answers **👍/👎** (logged for the eval loop), and **export** the chat.
+  **observability** (per-request tracing to `logs/traces.jsonl`).
+- **Provider failover** — several Groq keys, then Google Gemini's free tier, so a
+  document doesn't die half-written when a daily quota runs out.
 
 See [ROADMAP.md](ROADMAP.md) for the full plan and target production architecture.
 Demo login → **`demo` / `demo1234`** (change before real use).
@@ -49,38 +86,47 @@ flowchart LR
 | Concern | Technology |
 |---|---|
 | UI | Streamlit |
-| LLM (generation) | Llama 3.3 70B via **Groq** — or any **self-hosted** OpenAI-compatible endpoint (vLLM/Ollama/NIM) |
+| LLM (generation) | Llama 3.3 70B via **Groq**, failing over to **Gemini** free tier — or any **self-hosted** OpenAI-compatible endpoint (vLLM/Ollama/NIM) |
 | Embeddings | [fastembed](https://github.com/qdrant/fastembed) (ONNX, no PyTorch) |
 | Retrieval | **Hybrid** — dense vectors + BM25, fused with Reciprocal Rank Fusion; optional cross-encoder reranker |
+| Documents | Markdown → sanitised HTML (bleach) with Pygments highlighting and Mermaid diagrams |
 | Evaluation | Golden-set harness (hit@k / MRR per mode) |
-| Auth | session-based **bcrypt** login + roles (from `auth.yaml`); Keycloak SSO as upgrade |
+| Auth | session-based **bcrypt** login + roles (Supabase first, `auth.yaml` fallback); OIDC/SSO seam in `auth.authenticate()` |
+| Team features | Supabase (PostgREST) — people, tracks, shared library, access requests, audit log |
 | Guardrails | injection block + PII redaction + optional Groq Llama Guard |
 | Observability | local per-request tracing (`logs/traces.jsonl`) |
-| Knowledge source | WordPress REST API of drpranayjha.com |
+| Knowledge source | WordPress REST API of drpranayjha.com + uploaded PDFs |
 
 Fully open-source, no paid infrastructure.
 
 ## Project layout
 
 ```
-streamlit_app.py        Main app (entry point for Streamlit Cloud)
+streamlit_app.py        Shell: styling, sidebar, router, and the Ask (chat) tool
 chatbot/
-  config.py             Settings (retrieval mode, auth/guardrails/tracing toggles)
-  llm.py                Groq client + streaming
-  retrieval.py          Hybrid (dense + BM25 + RRF) + reranking       (Phase 1)
-  rag.py                Public interface, delegates to retrieval.py
-  vectorstore.py        Optional Qdrant (local) vector backend        (Phase 2)
-  auth.py               Session login (bcrypt) + roles                (Phase 2)
-  guardrails.py         Injection block + PII redaction + moderation  (Phase 2)
-  observability.py      Per-request tracing to logs/traces.jsonl      (Phase 2)
-  documents.py          PDF upload -> chunk + embed (chat with a doc)  (Phase 2)
+  config.py             Settings + the domain vocabulary every form is built from
+  studio.py             Tool registry, generate/refine loop, export, publishing
+  tools.py              The 18 generator forms - one function each
+  prompts.py            House style (BASE_SYSTEM) + one prompt builder per tool
+  render.py             Markdown -> branded document: icons, code, Mermaid, Word
+  admin.py              Shared library + Admin Console (people, tracks, requests)
+  store.py              Supabase (PostgREST) - people, library, requests, audit
+  auth.py               Session login (bcrypt), DB-first with auth.yaml fallback
+  llm.py                Groq / Gemini / OpenAI-compatible streaming + failover
+  retrieval.py          Hybrid (dense + BM25 + RRF) + reranking
+  rag.py                Public retrieval interface, delegates to retrieval.py
+  documents.py          PDF upload -> chunk + embed (grounding + chat)
+  guardrails.py         Injection block + PII redaction + moderation
+  observability.py      Per-request tracing to logs/traces.jsonl
+  vectorstore.py        Optional Qdrant (local) vector backend
 ingest/build_index.py   Pull site content -> embed -> save index
 eval/                   Golden set + hit@k / MRR harness
 scripts/make_hash.py    Generate a bcrypt password hash for auth.yaml
 data/                   Prebuilt knowledge index (committed)
 .streamlit/
   config.toml           Brand theme
-  auth.yaml             Demo users + roles (change before real use)
+  auth.yaml             Fallback users + roles (change before real use)
+SUPABASE_SETUP.md       Optional multi-trainer setup (SQL + secrets)
 ROADMAP.md              Target architecture + phased plan
 ```
 

@@ -1,6 +1,24 @@
-# DEMO credentials for the bcrypt session login (open-source, no license).
-# CHANGE the cookie key and these users before any real use.
+# Fallback logins for the bcrypt session gate (open-source, no license).
+#
+# This file is the SINGLE-TRAINER path and the safety net: once Supabase is
+# configured, people live in the `app_users` table and are managed from the
+# Admin Console, and this file is only consulted if the database is unreachable.
+#
+# CHANGE these users before any real use.
 # Generate a password hash:  python scripts/make_hash.py "your-password"
+#
+# Roles (see chatbot/config.py):
+#   admin      full control + the Admin Console
+#   lead       every tool, publishes to all tracks
+#   trainer    day-to-day tools, publishes to their own track
+#   associate  a reduced toolset; reads the shared library
+#
+# Anyone whose username is listed in the ADMIN_USERS setting (default: pranay)
+# is treated as an admin regardless of what is written here — that is the
+# bootstrap, so there is always a way in.
+#
+# Optional per-user keys: track, can_share_all, allowed_tools, allowed_models.
+#
 # Demo login →  username: demo   password: demo1234
 cookie:
   name: drjhagpt_auth
@@ -12,5 +30,6 @@ credentials:
       email: demo@drpranayjha.com
       name: Demo User
       password: $2b$12$EmB.DDjR9zyqGXp/x5G4RuKV.SwoXHoZLpP9vr.TJ4wKHxsIwcGpC
+      track: VMW
       roles:
-        - viewer
+        - lead

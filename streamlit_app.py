@@ -1,17 +1,30 @@
-"""DrJhaGPT — an open-source RAG chatbot with a brand-matched editorial UI.
+"""DrJhaGPT Pro — a technical-training studio with a brand-matched editorial UI.
 
-Stack: Groq (open LLMs) for generation + retrieval over drpranayjha.com content.
+A task studio for building and delivering training on VMware, cloud, Kubernetes,
+automation and AI infrastructure: course outlines, session plans, labs, demos,
+assessments, scripts, runbooks and handouts — plus the grounded RAG chat the app
+started life as, which now lives as the "Ask" tool.
+
+Stack: Groq / Gemini (open LLMs) for generation, hybrid retrieval over
+drpranayjha.com and uploaded PDFs for grounding, optional Supabase for the shared
+library and multi-trainer access.
+
 Visual design mirrors drpranayjha.com: white editorial theme, Inter/Oswald type,
 charcoal ink (#141618) with a red accent (#ce242c).
 """
 import base64
+import datetime as _dt
 import html
 from functools import lru_cache
 
 import streamlit as st
 
-from chatbot import (auth, config, documents, feedback, guardrails, llm,
-                     observability, rag, retrieval)
+from chatbot import (admin, auth, config, documents, feedback, guardrails, llm,
+                     observability, rag, retrieval, store, studio, tools)
+
+# Shown in the sidebar footer. Bump this on every change to confirm a deploy.
+APP_VERSION = "1.0.0"
+
 
 # ----------------------------------------------------------------------------- assets
 @lru_cache(maxsize=1)
@@ -33,7 +46,6 @@ def logo_image():
         return "🤖"
 
 
-
 SUGGESTIONS = [
     "What is VMware HCX and when should I use it?",
     "Give me a VCF 9 pre-installation checklist",
@@ -45,14 +57,14 @@ st.set_page_config(
     page_title=config.BRAND_FULL,
     page_icon=logo_image(),
     layout="centered",
-    initial_sidebar_state="expanded",   # show Options (model picker + PDF upload) by default
+    initial_sidebar_state="auto",
 )
 
 # ----------------------------------------------------------------------------- styling
 st.markdown(
     """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
   --ink: #141618; --accent: #ce242c; --accent-dark: #a81d24;
@@ -71,10 +83,9 @@ html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif; color: va
 [class*="_profileContainer"], [class*="profileContainer"], [data-testid="InputInstructions"],
 a[href*="streamlit.io"], a[href*="streamlit.app"] { display: none !important; }
 header[data-testid="stHeader"] { background: transparent; height: 0; }
-/* Breathing room above the New chat button (esp. in the narrow widget) */
 .st-key-new_chat { margin-top: 6px; }
 
-.block-container { max-width: 800px; padding-top: 1.6rem; padding-bottom: 6rem; }
+.block-container { max-width: 860px; padding-top: 1.6rem; padding-bottom: 6rem; }
 
 /* ---- Masthead ---- */
 .dj-masthead { display: flex; align-items: center; gap: clamp(10px, 3vw, 18px); }
@@ -97,17 +108,16 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .dj-rule { height: 1.5px; background: var(--accent); width: 100%; border: 0; margin: 14px 0 6px;
            border-radius: 0; }
 
-/* Frozen (sticky) header while the conversation scrolls under it.
-   !important is required: Streamlit sets position:relative on the block
-   wrapper with equal specificity, so without it our sticky is overridden.
-   The :has() rule also covers the case where the key lands one level in. */
+/* Frozen (sticky) header while content scrolls under it.
+   !important is required: Streamlit sets position:relative on the block wrapper
+   with equal specificity, so without it our sticky is overridden. */
 .st-key-dj_header,
 [data-testid="stVerticalBlockBorderWrapper"]:has(> .st-key-dj_header) {
   position: sticky !important; top: 0 !important; z-index: 100;
   background: #ffffff; padding-top: .4rem;
 }
 
-/* ---- Login card (branded sign-in) ---- */
+/* ---- Login card ---- */
 .st-key-dj_login_card { max-width: 430px; margin: 5vh auto 0; background: #ffffff;
   border: 1px solid var(--border); border-radius: 16px; padding: 30px 30px 22px;
   box-shadow: 0 12px 34px rgba(20,22,24,.07); }
@@ -128,7 +138,6 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .dj-login-sub { color: var(--muted); font-size: 13px; margin: 3px 0 2px; }
 .dj-login-foot { color: var(--muted); font-size: 12px; text-align: center; margin-top: 16px; }
 .dj-login-foot a { color: var(--accent); text-decoration: none; }
-/* Strip the form's default frame (the card is the frame) + brand the inputs/button */
 .st-key-dj_login_card [data-testid="stForm"] { border: 0 !important; padding: 0 !important; }
 .st-key-dj_login_card [data-baseweb="input"] { border-radius: 9px !important; }
 .st-key-dj_login_card [data-testid="stForm"] button {
@@ -136,7 +145,6 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
   border-radius: 9px !important; font-weight: 600 !important; letter-spacing: .2px; padding: .55rem 1rem !important; }
 .st-key-dj_login_card [data-testid="stForm"] button:hover { background: var(--accent-dark) !important; }
 
-/* Compact the frozen header on small screens so it steals less vertical room */
 @media (max-width: 640px) {
   .st-key-dj_header { padding-top: .15rem; }
   .dj-masthead { gap: 10px; }
@@ -154,15 +162,19 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 [data-testid="stChatMessage"] a:hover { border-bottom-color: var(--accent); }
 [data-testid="stChatMessage"] h1, [data-testid="stChatMessage"] h2, [data-testid="stChatMessage"] h3 {
   font-family: 'Oswald', sans-serif; color: var(--ink); letter-spacing: .2px; margin-top: .4rem; }
+[data-testid="stChatMessage"] code { font-family: 'JetBrains Mono', Consolas, monospace;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  padding: 1px 5px; font-size: 13px; color: #8a1b21; }
+[data-testid="stChatMessage"] pre code { background: #1b1e21; color: #e6e6e6; border: 0; }
 
-/* ---- User question bubble (right-aligned, grey) ---- */
+/* ---- User question bubble ---- */
 .dj-user-row { display: flex; justify-content: flex-end; margin: 12px 0 4px; }
 .dj-user-bubble { background: var(--panel); color: var(--ink); border: 1px solid var(--border);
   border-right: 3px solid var(--accent);
   border-radius: 14px 14px 4px 14px; padding: 9px 14px 9px 16px; max-width: 82%;
   font-size: 15px; line-height: 1.55; white-space: pre-wrap; }
 
-/* ---- "Related reading" source cards ---- */
+/* ---- Source cards ---- */
 .dj-sources { margin: 14px 0 2px; }
 .dj-sources-label { font-family: 'Oswald', sans-serif; color: var(--accent); font-size: 11px;
                     letter-spacing: 2.5px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
@@ -174,7 +186,7 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .dj-source-title { color: var(--ink) !important; font-weight: 600; font-size: 14px; }
 .dj-source-host { color: var(--muted); font-size: 12px; }
 
-/* ---- Suggestion chips (empty state) ---- */
+/* ---- Buttons ---- */
 .dj-intro { color: var(--muted); font-size: 14.5px; margin: 6px 0 14px; }
 div[data-testid="stButton"] > button {
   border: 1px solid var(--border); background: #fff; color: var(--ink);
@@ -182,25 +194,33 @@ div[data-testid="stButton"] > button {
   text-align: left; transition: all .15s; }
 div[data-testid="stButton"] > button:hover {
   border-color: var(--accent); color: var(--accent); background: #fff; }
-
-/* "New chat" button — red outline that fills on hover */
 .st-key-new_chat button { border: 1.5px solid var(--accent) !important;
   color: var(--accent) !important; text-align: center !important; }
 .st-key-new_chat button:hover { background: var(--accent) !important; color: #fff !important; }
+
+/* Primary form submit buttons read as the main action on every tool. */
+[data-testid="stForm"] [data-testid="stFormSubmitButton"] button {
+  background: var(--accent) !important; color: #fff !important; border: 0 !important;
+  border-radius: 8px !important; font-weight: 600 !important; text-align: center !important;
+  padding: .55rem 1rem !important; }
+[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover {
+  background: var(--accent-dark) !important; }
+[data-testid="stForm"] { border: 1px solid var(--border) !important; border-radius: 12px !important;
+  padding: 18px 18px 6px !important; background: #fff; }
 
 /* ---- Chat input ---- */
 [data-testid="stChatInput"] { border: 1.5px solid var(--accent) !important;
   border-radius: 12px !important; background: #fff !important; }
 [data-testid="stChatInput"] > div { border: 0 !important; background: transparent !important; }
 [data-testid="stChatInput"]:focus-within { box-shadow: 0 0 0 3px rgba(206,36,44,.15) !important; }
-/* Red send button */
 [data-testid="stChatInputSubmitButton"] { background: var(--accent) !important;
   border-radius: 8px !important; }
 [data-testid="stChatInputSubmitButton"]:hover { background: var(--accent-dark) !important; }
 [data-testid="stChatInputSubmitButton"] svg { color: #fff !important; fill: #fff !important; }
 
-/* ---- Branded sidebar ---- */
+/* ---- Sidebar ---- */
 [data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid var(--border); }
+[data-testid="stSidebar"] .block-container { padding-top: 1rem; }
 .dj-sb-brand { display: flex; align-items: center; gap: 10px; }
 .dj-sb-brand img { width: 36px; height: 36px; border-radius: 8px; border: 2px solid var(--accent); }
 .dj-sb-title { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 21px; color: var(--ink); line-height: 1; }
@@ -209,6 +229,8 @@ div[data-testid="stButton"] > button:hover {
 .dj-sb-rule { height: 2px; background: var(--accent); border: 0; margin: 10px 0 12px; width: 100%; }
 .dj-sb-label { font-family: 'Oswald', sans-serif; color: var(--accent); font-size: 10.5px; letter-spacing: 2px;
   font-weight: 600; text-transform: uppercase; margin: 16px 0 7px; }
+.dj-sb-group { font-family: 'Oswald', sans-serif; color: var(--muted); font-size: 9.5px; letter-spacing: 1.8px;
+  font-weight: 600; text-transform: uppercase; margin: 13px 0 5px; padding-left: 2px; }
 .dj-sb-user { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
   border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 11px; margin-bottom: 8px; font-size: 13px; color: var(--ink); }
 .dj-sb-user b { font-weight: 700; }
@@ -219,27 +241,83 @@ div[data-testid="stButton"] > button:hover {
 .dj-sb-status { font-size: 12px; color: var(--muted); line-height: 1.9; }
 .dj-sb-status b { color: var(--ink); font-weight: 600; }
 .dj-sb-status a { color: var(--accent); text-decoration: none; }
+.dj-sb-ver { color: #9a9a9a; font-size: 10px; letter-spacing: .4px; margin-top: 18px; text-align: center; }
 
-/* Sidebar buttons: centered + consistent */
-[data-testid="stSidebar"] div[data-testid="stButton"] > button,
+/* Navigation buttons: flat, left-aligned, one click each. */
+[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+  border-radius: 6px !important; text-align: left !important; padding: 6px 11px !important;
+  font-size: 13px !important; border-color: transparent !important; width: 100%; }
+[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
+  background: var(--panel) !important; border-color: var(--border) !important; }
 [data-testid="stSidebar"] div[data-testid="stDownloadButton"] > button {
   text-align: center !important; border-radius: 8px !important; }
+.dj-nav-on button { background: var(--ink) !important; color: #fff !important;
+  border-color: var(--ink) !important; font-weight: 600 !important; }
+.dj-nav-on button:hover { background: var(--ink) !important; color: #fff !important; }
 
-/* Model picker + PDF uploader (brand accents) */
 [data-testid="stFileUploaderDropzone"] { border: 1.5px dashed var(--accent) !important;
   background: #fff !important; border-radius: 10px !important; }
 [data-baseweb="select"] > div:focus-within { border-color: var(--accent) !important;
   box-shadow: 0 0 0 2px rgba(206,36,44,.12) !important; }
+
+/* ---- Studio: tool page furniture ---- */
+.dj-tool-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+.dj-tool-name { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px; color: var(--ink); }
+.dj-tool-group { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 2px;
+  text-transform: uppercase; color: #fff; background: var(--accent); padding: 3px 8px; border-radius: 3px; }
+.dj-tool-blurb { color: var(--muted); font-size: 14px; margin: 4px 0 16px; }
+.dj-refine-label { font-family: 'Oswald', sans-serif; color: var(--accent); font-size: 10.5px;
+  letter-spacing: 2.2px; font-weight: 600; text-transform: uppercase; margin: 20px 0 6px; }
+.dj-share { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; }
+.dj-share-lbl { font-family: 'Oswald', sans-serif; color: var(--muted); font-size: 10px;
+  letter-spacing: 2px; text-transform: uppercase; }
+.dj-share-a { color: var(--accent) !important; text-decoration: none !important; font-size: 13px;
+  font-weight: 500; border: 1px solid var(--border); border-radius: 999px; padding: 4px 13px; }
+.dj-share-a:hover { border-color: var(--accent); }
+.dj-limit { border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 14px 16px; background: var(--panel); font-size: 14px;
+  line-height: 1.65; color: var(--ink); }
+.dj-limit a { color: var(--accent); }
+.dj-env { background: #fff4e5; border: 1px solid #f0c98a; border-radius: 6px; padding: 7px 12px;
+  font-size: 12.5px; color: #7a5300; margin-bottom: 12px; }
+
+/* ---- Chips + people/track lists (Admin, Library) ---- */
+.dj-chip { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .4px;
+  padding: 2px 9px; border-radius: 999px; margin-left: 6px; border: 1px solid var(--border);
+  color: var(--muted); background: #fff; }
+.dj-chip-a { background: var(--ink); color: #fff; border-color: var(--ink); }
+.dj-chip-l { background: var(--accent); color: #fff; border-color: var(--accent); }
+.dj-chip-t { background: var(--panel); color: var(--ink); }
+.dj-chip-s { background: #e9f6ee; color: #15703f; border-color: #bfe3ce; }
+.dj-chip-d { background: #fbeaea; color: #9b1c22; border-color: #f0c4c6; }
+.dj-people { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+.dj-person { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.dj-person:last-child { border-bottom: 0; }
+.dj-person-u { color: var(--muted); font-size: 12px; margin-left: 8px; }
+
+/* Tabs (Admin Console) */
+[data-baseweb="tab-list"] { gap: 4px; border-bottom: 1px solid var(--border); }
+[data-baseweb="tab"] { font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 1.2px;
+  text-transform: uppercase; }
+[data-baseweb="tab"][aria-selected="true"] { color: var(--accent) !important; }
+[data-baseweb="tab-highlight"] { background: var(--accent) !important; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
 
-# ----------------------------------------------------------------------------- components
+# ----------------------------------------------------------------------------- chrome
 def clear_chat():
     st.session_state.messages = []
     st.session_state.pop("pending", None)
+
+
+def goto(tool_key):
+    """Navigate to a tool (used as a button callback, so it lands before rerun)."""
+    st.session_state["tool"] = tool_key
 
 
 def render_header():
@@ -253,24 +331,33 @@ def render_header():
             return
         logo = logo_data_uri()
         img = f'<img src="{logo}" alt="logo">' if logo else ""
-        left, right = st.columns([5, 1.4], vertical_alignment="center")
-        with left:
-            st.markdown(
-                f"""
-                <div class="dj-masthead">
-                  {img}
-                  <div class="dj-headtext">
-                    <h1 class="dj-title">DrJha<span class="accent">GPT</span><span class="dj-pro">PRO</span></h1>
-                    <p class="dj-journal">{config.BRAND_EYEBROW}</p>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with right:
-            st.button("↺  New chat", key="new_chat", on_click=clear_chat,
-                      use_container_width=True)
+        st.markdown(
+            f"""
+            <div class="dj-masthead">
+              {img}
+              <div class="dj-headtext">
+                <h1 class="dj-title">DrJha<span class="accent">GPT</span><span class="dj-pro">PRO</span></h1>
+                <p class="dj-journal">{config.BRAND_STUDIO_EYEBROW}</p>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown('<hr class="dj-rule">', unsafe_allow_html=True)
+
+
+def _model_label(m: str) -> str:
+    """Friendly names, so the picker reads as capability rather than model ids."""
+    friendly = {
+        "llama-3.3-70b-versatile": "Standard — best all-round",
+        "llama-3.1-8b-instant": "Quick — fastest, lighter depth",
+        "openai/gpt-oss-120b": "Deep — longest, most thorough",
+        "meta-llama/llama-4-scout-17b-16e-instruct": "Wide — long documents",
+        "qwen/qwen3-32b": "Precise — good with code",
+    }
+    if config.is_gemini(m):
+        return f"Google {m.replace('gemini-', 'Gemini ').replace('-', ' ')}"
+    return friendly.get(m, m)
 
 
 def render_sidebar(user=None, roles=None):
@@ -279,72 +366,144 @@ def render_sidebar(user=None, roles=None):
         img = f'<img src="{logo}" alt="">' if logo else ""
         st.markdown(
             f'<div class="dj-sb-brand">{img}<div>'
-            f'<div class="dj-sb-title">DrJha<span>GPT</span></div>'
-            f'<div class="dj-sb-sub">{config.BRAND_EYEBROW}</div></div></div>'
+            f'<div class="dj-sb-title">DrJha<span>GPT</span> PRO</div>'
+            f'<div class="dj-sb-sub">{config.BRAND_STUDIO_EYEBROW}</div></div></div>'
             '<hr class="dj-sb-rule">',
             unsafe_allow_html=True,
         )
 
         if config.ENABLE_AUTH and user:
-            role = (roles or ["user"])[0]
+            sess = auth.session()
+            role = config.ROLE_LABELS.get(auth.role(), auth.role())
+            name = sess.get("name") or user
             st.markdown(
-                f'<div class="dj-sb-user"><span class="dj-sb-ava">{(user or "?")[:1].upper()}</span>'
-                f'<b>{user}</b><span class="dj-sb-badge">{role}</span></div>',
+                f'<div class="dj-sb-user"><span class="dj-sb-ava">'
+                f'{html.escape(name[:1].upper())}</span>'
+                f'<b>{html.escape(name)}</b>'
+                f'<span class="dj-sb-badge">{html.escape(role)}</span></div>',
                 unsafe_allow_html=True,
             )
-            auth.render_logout()
 
+        # --- Navigation -----------------------------------------------------
+        available = studio.allowed_tools()
+        current = st.session_state.get("tool", "ask")
+
+        st.markdown('<div class="dj-sb-label">Create</div>', unsafe_allow_html=True)
+        for group, keys in studio.TOOL_GROUPS:
+            shown = [k for k in keys if k in available]
+            if not shown:
+                continue
+            st.markdown(f'<div class="dj-sb-group">{group}</div>',
+                        unsafe_allow_html=True)
+            for key in shown:
+                cls = "dj-nav-on" if key == current else ""
+                with st.container(key=f"nav_{key}"):
+                    st.button(studio.TOOL_LABELS[key], key=f"navb_{key}",
+                              on_click=goto, args=(key,), use_container_width=True)
+                if cls:
+                    st.markdown(
+                        f'<style>.st-key-nav_{key} button{{background:var(--ink)!important;'
+                        'color:#fff!important;border-color:var(--ink)!important;'
+                        'font-weight:600!important;}</style>',
+                        unsafe_allow_html=True)
+
+        st.markdown('<div class="dj-sb-label">Go to</div>', unsafe_allow_html=True)
+        for key in ("ask", "library", "admin"):
+            if key not in available:
+                continue
+            if key == "library" and not store.enabled():
+                continue
+            with st.container(key=f"nav_{key}"):
+                st.button(studio.TOOL_LABELS[key], key=f"navb_{key}",
+                          on_click=goto, args=(key,), use_container_width=True)
+            if key == current:
+                st.markdown(
+                    f'<style>.st-key-nav_{key} button{{background:var(--ink)!important;'
+                    'color:#fff!important;border-color:var(--ink)!important;'
+                    'font-weight:600!important;}</style>',
+                    unsafe_allow_html=True)
+
+        # --- Document details ------------------------------------------------
+        with st.expander("Document details"):
+            st.text_input("Course / programme", key="meta_course",
+                          placeholder="VCF 9 Administration")
+            st.text_input("Trainer", key="meta_trainer",
+                          value=st.session_state.get("meta_trainer")
+                          or (auth.session().get("name") or user or ""))
+            st.text_input("Product version", key="meta_version",
+                          placeholder="vSphere 8.0 U3",
+                          help="Also printed on every document you export.")
+            st.date_input("Date", key="meta_date", value=_dt.date.today())
+
+        # --- Options ---------------------------------------------------------
+        st.markdown('<div class="dj-sb-label">Options</div>', unsafe_allow_html=True)
+        opts = studio.allowed_models()
+        cur = st.session_state.get("model", config.LLM_MODEL)
+        st.session_state["model"] = st.selectbox(
+            "Assistant", opts, index=opts.index(cur) if cur in opts else 0,
+            format_func=_model_label)
+
+        _ingest_uploads(st.file_uploader("Ground in a PDF", type=["pdf"],
+                                         accept_multiple_files=True))
+        docs = st.session_state.get("docs", {})
+        for name, (chunks, _v) in docs.items():
+            st.caption(f"{name} — {len(chunks)} chunks")
+        if docs and st.button("Clear documents", use_container_width=True):
+            st.session_state.pop("docs", None)
+            st.rerun()
+
+        if st.session_state.get("tool", "ask") == "ask":
+            st.segmented_control("Answer from", ["Website + PDF", "Website", "PDF"],
+                                 key="scope")
+            if st.session_state.get("messages"):
+                st.download_button("Export chat", data=_chat_markdown(),
+                                   file_name="drjhagpt-chat.md", mime="text/markdown",
+                                   use_container_width=True)
+
+        # --- Recent ----------------------------------------------------------
+        hist = st.session_state.get("dj_history") or []
+        if hist:
+            st.markdown('<div class="dj-sb-label">Recent</div>', unsafe_allow_html=True)
+            for i, h in enumerate(hist[:6]):
+                if st.button(f"{h['label']} · {h['title'][:26]}", key=f"hist{i}",
+                             use_container_width=True):
+                    st.session_state["tool"] = h["tool"]
+                    st.session_state[f"out::{h['tool']}"] = h["md"]
+                    st.rerun()
+
+        # --- Status ----------------------------------------------------------
         kb = rag.has_knowledge()
         st.markdown('<div class="dj-sb-label">Status</div>', unsafe_allow_html=True)
-        dot_color = "#15935a" if kb else "#c99a00"
+        dot = "#15935a" if kb else "#c99a00"
+        lib = "connected" if store.enabled() else "off"
         st.markdown(
             f'<div class="dj-sb-status">'
             f'Retrieval &nbsp; <b>{config.RETRIEVAL_MODE}</b><br>'
             f'Knowledge base &nbsp; <b>{"loaded" if kb else "not built"}</b>'
             f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
-            f'background:{dot_color};vertical-align:middle;margin-left:5px"></span><br>'
-            f'<a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 16 16 8"/><path d="M9 8h7v7"/></svg></a>'
-            '</div>',
+            f'background:{dot};vertical-align:middle;margin-left:5px"></span><br>'
+            f'Shared library &nbsp; <b>{lib}</b><br>'
+            f'<a href="{config.WEBSITE_URL}" target="_blank">drpranayjha.com</a>'
+            "</div>",
             unsafe_allow_html=True,
         )
 
-        if config.ENABLE_TRACING and roles and "admin" in roles:
+        if config.ENABLE_TRACING and auth.is_admin():
             s = observability.summarize()
             fb = feedback.summary()
             st.markdown('<div class="dj-sb-label">Metrics</div>', unsafe_allow_html=True)
             st.markdown(
-                f'<div class="dj-sb-status">📊 <b>{s.get("traces", 0)}</b> traces<br>'
-                f'👍 <b>{fb["up"]}</b> · 👎 <b>{fb["down"]}</b> feedback</div>',
-                unsafe_allow_html=True,
-            )
+                f'<div class="dj-sb-status"><b>{s.get("traces", 0)}</b> traces<br>'
+                f'<b>{fb["up"]}</b> up · <b>{fb["down"]}</b> down</div>',
+                unsafe_allow_html=True)
 
-        st.markdown('<div class="dj-sb-label">Options</div>', unsafe_allow_html=True)
-        _opts = list(dict.fromkeys([config.LLM_MODEL] + config.AVAILABLE_MODELS))
-        _cur = st.session_state.get("model", config.LLM_MODEL)
-        st.session_state["model"] = st.selectbox(
-            "Model", _opts, index=_opts.index(_cur) if _cur in _opts else 0)
-        st.session_state.setdefault("scope", "Website + PDF")
-        st.segmented_control(
-            "Answer from", ["Website + PDF", "Website", "PDF"], key="scope")
-        _ingest_uploads(st.file_uploader("Chat with a PDF", type=["pdf"],
-                                         accept_multiple_files=True))
-        _docs = st.session_state.get("docs", {})
-        for _name, (_ch, _v) in _docs.items():
-            st.caption(f"📄 {_name} — {len(_ch)} chunks")
-        if _docs and st.button("Clear documents", use_container_width=True):
-            st.session_state.pop("docs", None)
-            st.rerun()
-
-        if st.session_state.get("messages"):
-            st.download_button("⬇ Export chat", data=_chat_markdown(),
-                               file_name="drjhagpt-chat.md", mime="text/markdown",
-                               use_container_width=True)
-
-        if st.button("Clear conversation", use_container_width=True):
-            st.session_state.messages = []
-            st.rerun()
+        if config.ENABLE_AUTH and user:
+            auth.render_logout()
+        st.markdown(f'<div class="dj-sb-ver">v{APP_VERSION}</div>',
+                    unsafe_allow_html=True)
 
 
+# ----------------------------------------------------------------------------- chat (the Ask tool)
 def render_sources(results):
     if not results:
         return
@@ -355,8 +514,8 @@ def render_sources(results):
             seen.add(link)
             cards.append(
                 f'<a class="dj-source" href="{link}" target="_blank">'
-                f'<span class="dj-source-title">{title}</span>'
-                f'<span class="dj-source-host">drpranayjha.com <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M8 16 16 8"/><path d="M9 8h7v7"/></svg></span></a>'
+                f'<span class="dj-source-title">{html.escape(str(title))}</span>'
+                '<span class="dj-source-host">drpranayjha.com</span></a>'
             )
     if cards:
         st.markdown(
@@ -443,7 +602,7 @@ def _record_feedback(idx, rating):
             break
     feedback.log({
         "rating": rating,
-        "user": (st.session_state.get("dj_auth") or {}).get("username", "anonymous"),
+        "user": auth.session().get("username", "anonymous"),
         "model": st.session_state.get("model"),
         "question": guardrails.redact_pii(question),
         "answer_preview": (msgs[idx].get("content") or "")[:300],
@@ -453,7 +612,7 @@ def _record_feedback(idx, rating):
 
 def _render_feedback(msg, idx):
     if msg.get("rating"):
-        st.caption("✓ Thanks — feedback recorded.")
+        st.caption("Thanks — feedback recorded.")
         return
     c1, c2, _ = st.columns([1, 1, 10])
     c1.button("👍", key=f"fb_up_{idx}", help="Helpful",
@@ -479,7 +638,8 @@ def pick_suggestion(question: str):
 
 def render_empty_state():
     st.markdown(
-        '<p class="dj-intro">Ask Pranay anything — or start with one of these:</p>',
+        '<p class="dj-intro">Ask anything technical — grounded in your published '
+        'work and any PDF you upload.</p>',
         unsafe_allow_html=True,
     )
     cols = st.columns(2)
@@ -488,13 +648,91 @@ def render_empty_state():
                            on_click=pick_suggestion, args=(q,))
 
 
+def tool_ask(user, roles):
+    """The grounded RAG chat — the original DrJhaGPT, now one tool in the studio."""
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    if not st.session_state.messages and not st.session_state.get("pending"):
+        render_empty_state()
+
+    for i, msg in enumerate(st.session_state.messages):
+        if msg["role"] == "user":
+            render_user(msg["content"])
+        else:
+            with st.chat_message("assistant", avatar=logo_image()):
+                st.markdown(msg["content"])
+                if msg.get("sources"):
+                    render_sources(msg["sources"])
+                if msg.get("doc_sources"):
+                    render_doc_sources(msg["doc_sources"])
+                _render_feedback(msg, i)
+
+    if st.session_state.pop("_scroll", False):
+        _scroll_to_bottom()
+
+    typed = st.chat_input("Ask anything about Intelligent Infrastructure…")
+    prompt = typed or st.session_state.pop("pending", None)
+    if not prompt:
+        return
+
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    render_user(prompt)
+
+    # Guardrail: block obvious prompt-injection before any retrieval/model call.
+    allowed, reason = guardrails.check_input(prompt)
+    if not allowed:
+        with st.chat_message("assistant", avatar=logo_image()):
+            st.warning(reason)
+        st.session_state.messages.append({"role": "assistant", "content": reason,
+                                          "sources": []})
+        return
+
+    with st.chat_message("assistant", avatar=logo_image()):
+        if not config.LLM_READY:
+            st.error("Configure an LLM first (see the message above).")
+            st.session_state.messages.pop()
+            return
+
+        # Observability: trace stage latencies + metadata (question is PII-redacted).
+        trace = observability.Trace(guardrails.redact_pii(prompt),
+                                    user=user or "anonymous")
+
+        scope = st.session_state.get("scope") or "Website + PDF"
+        with st.spinner("Searching…"):
+            with trace.span("retrieve"):
+                results = rag.retrieve(prompt) if scope != "PDF" else []
+                doc_hits = _search_docs(prompt) if scope != "Website" else []
+                context = _build_context(results, doc_hits)
+
+        history = [{"role": m["role"], "content": m["content"]}
+                   for m in st.session_state.messages[:-1]][-6:]
+
+        try:
+            with trace.span("generate"):
+                answer = st.write_stream(
+                    llm.stream_answer(prompt, context, history,
+                                      model=st.session_state.get("model")))
+        except Exception as exc:
+            studio.show_error(exc)
+            st.session_state.messages.pop()
+            return
+
+        trace.set(mode=config.RETRIEVAL_MODE, model=st.session_state.get("model"),
+                  scope=scope, n_sources=len(results), n_doc_hits=len(doc_hits),
+                  sources=[r.get("url") for r in results], roles=roles)
+        trace.save()
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": answer, "sources": results,
+         "doc_sources": doc_hits})
+    st.session_state["_scroll"] = True
+    st.rerun()
+
+
 # ----------------------------------------------------------------------------- app
 def _run_js(js: str):
-    """Execute JS in a 0-height frame that can reach the app DOM.
-
-    st.components.v1.html renders a same-origin child iframe whose scripts run
-    reliably (inline st.html is sanitized on some hosts). Falls back to st.html.
-    """
+    """Execute JS in a 0-height frame that can reach the app DOM."""
     code = f"<script>{js}</script>"
     try:
         st.components.v1.html(code, height=0)
@@ -506,7 +744,13 @@ def _run_js(js: str):
 
 
 def _hide_streamlit_badge():
-    """Hide the Community Cloud 'Built with Streamlit' bar + Fullscreen link."""
+    """Hide the Community Cloud 'Built with Streamlit' bar + Fullscreen link.
+
+    Bounded on purpose. This used to poll every 500ms forever, which keeps the
+    renderer permanently busy (screenshots and headless captures never settle)
+    for no benefit: every Streamlit rerun re-injects this component anyway, so a
+    short burst plus a DOM observer catches the badge whenever it appears.
+    """
     _run_js(
         """
         (function(){
@@ -514,8 +758,20 @@ def _hide_streamlit_badge():
             d.querySelectorAll('a[href*="streamlit.io"],a[href*="streamlit.app"]').forEach(function(a){a.style.display='none';if(a.parentElement){a.parentElement.style.display='none';}});
             Array.prototype.forEach.call(d.querySelectorAll('button,a,span'),function(el){if(el.childElementCount===0){var t=(el.textContent||'').trim();if(t==='Fullscreen'||t==='Built with Streamlit'){var p=el.closest('div');if(p){p.style.display='none';}}}});
           }catch(e){} }
-          function kill(){ try{ if(window.parent&&window.parent!==window){ scrub(window.parent.document); } }catch(e){} scrub(document); }
-          setInterval(kill,500); kill();
+          function doc(){ try{ if(window.parent&&window.parent!==window){ return window.parent.document; } }catch(e){} return document; }
+          function kill(){ scrub(doc()); scrub(document); }
+          kill();
+          var n=0, t=setInterval(function(){ kill(); if(++n>=12){ clearInterval(t); } },500);
+          try{
+            var target=doc().body;
+            if(target && window.MutationObserver){
+              var pending=false;
+              new MutationObserver(function(){
+                if(pending) return; pending=true;
+                setTimeout(function(){ pending=false; kill(); },250);
+              }).observe(target,{childList:true,subtree:true});
+            }
+          }catch(e){}
         })();
         """
     )
@@ -538,105 +794,72 @@ def _scroll_to_bottom():
     )
 
 
+def _tool_group_of(key):
+    for group, keys in studio.TOOL_GROUPS:
+        if key in keys:
+            return group
+    return {"ask": "Ask", "library": "Team", "admin": "Team"}.get(key, "")
+
+
+def render_tool_head(key):
+    if key == "ask":
+        return
+    st.markdown(
+        f'<div class="dj-tool-head"><span class="dj-tool-name">'
+        f'{html.escape(studio.TOOL_LABELS.get(key, key))}</span>'
+        f'<span class="dj-tool-group">{html.escape(_tool_group_of(key))}</span></div>',
+        unsafe_allow_html=True)
+
+
 def main():
     _hide_streamlit_badge()
 
-    # Phase 2: open-source login gate (no-op if ENABLE_AUTH is off).
     authed, user, roles = auth.gate()
     if not authed:
         return
 
+    # A DB user whose password was set by an admin must replace it first.
+    if auth.force_password_change():
+        return
+
+    st.session_state.setdefault("tool", "ask")
+    st.session_state.setdefault("scope", "Website + PDF")
+
     render_sidebar(user, roles)
     render_header()
+
+    if config.IS_STAGING:
+        st.markdown(f'<div class="dj-env">Test environment ({config.APP_ENV}) — '
+                    'not the live studio.</div>', unsafe_allow_html=True)
 
     if not config.LLM_READY:
         st.warning(
             "**Setup needed:** configure an LLM.\n\n"
             "- **Groq (default):** set `GROQ_API_KEY` (free at https://console.groq.com/keys).\n"
+            "- **Gemini (free fallback):** set `GEMINI_API_KEY`.\n"
             "- **Self-hosted:** set `LLM_BASE_URL` to your OpenAI-compatible endpoint "
             "(vLLM / Ollama / NIM)."
         )
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    tool = st.session_state.get("tool", "ask")
+    if tool not in studio.allowed_tools():
+        tool = st.session_state["tool"] = "ask"
 
-    # Empty state: intro + suggestion chips.
-    if not st.session_state.messages and not st.session_state.get("pending"):
-        render_empty_state()
+    render_tool_head(tool)
 
-    # Replay history.
-    for i, msg in enumerate(st.session_state.messages):
-        if msg["role"] == "user":
-            render_user(msg["content"])
+    if tool == "ask":
+        tool_ask(user, roles)
+    elif tool == "library":
+        admin.tool_library()
+    elif tool == "admin":
+        admin.tool_admin()
+    else:
+        handler = tools.REGISTRY.get(tool)
+        if handler:
+            handler()
         else:
-            with st.chat_message("assistant", avatar=logo_image()):
-                st.markdown(msg["content"])
-                if msg.get("sources"):
-                    render_sources(msg["sources"])
-                if msg.get("doc_sources"):
-                    render_doc_sources(msg["doc_sources"])
-                _render_feedback(msg, i)
-
-    if st.session_state.pop("_scroll", False):
-        _scroll_to_bottom()
-
-    typed = st.chat_input("Ask Pranay anything about Intelligent Infrastructure…")
-    prompt = typed or st.session_state.pop("pending", None)
-    if not prompt:
-        return
-
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    render_user(prompt)
-
-    # Guardrail: block obvious prompt-injection before any retrieval/model call.
-    allowed, reason = guardrails.check_input(prompt)
-    if not allowed:
-        with st.chat_message("assistant", avatar=logo_image()):
-            st.warning(reason)
-        st.session_state.messages.append({"role": "assistant", "content": reason, "sources": []})
-        return
-
-    with st.chat_message("assistant", avatar=logo_image()):
-        if not config.LLM_READY:
-            st.error("Configure an LLM first (see the message above).")
-            st.session_state.messages.pop()
-            return
-
-        # Observability: trace stage latencies + metadata (question is PII-redacted).
-        trace = observability.Trace(guardrails.redact_pii(prompt), user=user or "anonymous")
-
-        scope = st.session_state.get("scope") or "Website + PDF"
-        with st.spinner("Searching…"):
-            with trace.span("retrieve"):
-                results = rag.retrieve(prompt) if scope != "PDF" else []
-                doc_hits = _search_docs(prompt) if scope != "Website" else []
-                context = _build_context(results, doc_hits)
-
-        history = [
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.messages[:-1]
-        ][-6:]
-
-        try:
-            with trace.span("generate"):
-                answer = st.write_stream(
-                    llm.stream_answer(prompt, context, history,
-                                      model=st.session_state.get("model")))
-        except Exception as exc:
-            st.error(f"Sorry — the model call failed: {exc}")
-            st.session_state.messages.pop()
-            return
-
-        trace.set(mode=config.RETRIEVAL_MODE, model=st.session_state.get("model"),
-                  scope=scope, n_sources=len(results), n_doc_hits=len(doc_hits),
-                  sources=[r.get("url") for r in results], roles=roles)
-        trace.save()
-
-    st.session_state.messages.append(
-        {"role": "assistant", "content": answer, "sources": results, "doc_sources": doc_hits}
-    )
-    st.session_state["_scroll"] = True
-    st.rerun()
+            st.session_state["tool"] = "ask"
+            st.rerun()
 
 
 if __name__ == "__main__":

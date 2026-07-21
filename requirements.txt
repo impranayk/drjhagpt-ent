@@ -4,11 +4,16 @@ python-dotenv>=1.0
 fastembed>=0.4
 numpy>=1.26
 requests>=2.31
+httpx>=0.27
 rank-bm25>=0.2.2
 openai>=1.30
 pypdf>=4.0
 PyYAML>=6.0
 bcrypt>=4.0
+# Studio document rendering: Markdown -> branded HTML, sanitised, highlighted.
+Markdown>=3.5
+bleach>=6.0
+Pygments>=2.17
 # Optional (Phase 2 upgrades — not required to run):
 #   qdrant-client                             -> local vector DB backend (set VECTOR_BACKEND=qdrant)
 #   presidio-analyzer, presidio-anonymizer    -> production-grade PII (set USE_PRESIDIO=1)
