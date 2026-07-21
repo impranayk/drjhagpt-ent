@@ -20,7 +20,7 @@ from functools import lru_cache
 import streamlit as st
 
 from chatbot import (admin, auth, config, documents, feedback, guardrails, llm,
-                     observability, rag, retrieval, store, studio, tools)
+                     observability, rag, render, retrieval, store, studio, tools)
 
 # Shown in the sidebar footer. Bump this on every change to confirm a deploy.
 APP_VERSION = "1.0.0"
@@ -81,6 +81,7 @@ html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif; color: va
 [data-testid="stAppDeployButton"],
 [class*="viewerBadge"], [class*="_viewerBadge"], [class*="ViewerBadge"],
 [class*="_profileContainer"], [class*="profileContainer"], [data-testid="InputInstructions"],
+[data-testid="manageAppButton"], [data-testid="stAppToolbar"],
 a[href*="streamlit.io"], a[href*="streamlit.app"] { display: none !important; }
 header[data-testid="stHeader"] { background: transparent; height: 0; }
 /* The sidebar-expand control lives inside that zero-height header, so it became
@@ -264,17 +265,38 @@ div[data-testid="stButton"] > button:hover {
 .dj-sb-status a { color: var(--accent); text-decoration: none; }
 .dj-sb-ver { color: #9a9a9a; font-size: 10px; letter-spacing: .4px; margin-top: 18px; text-align: center; }
 
-/* Navigation buttons: flat, left-aligned, one click each. */
-[data-testid="stSidebar"] div[data-testid="stButton"] > button {
-  border-radius: 6px !important; text-align: left !important; padding: 6px 11px !important;
-  font-size: 13px !important; border-color: transparent !important; width: 100%; }
-[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
-  background: var(--panel) !important; border-color: var(--border) !important; }
-[data-testid="stSidebar"] div[data-testid="stDownloadButton"] > button {
-  text-align: center !important; border-radius: 8px !important; }
-.dj-nav-on button { background: var(--ink) !important; color: #fff !important;
+/* Navigation buttons: flat, left-aligned, tightly stacked, one click each.
+   Streamlit buttons are flex containers, so text-align does nothing - the label
+   is centred by justify-content and only justify-content can move it. */
+[data-testid="stSidebar"] div[data-testid="stButton"] > button,
+.st-key-dj_menu div[data-testid="stButton"] > button {
+  justify-content: flex-start !important; text-align: left !important;
+  border-radius: 6px !important; padding: 5px 11px !important; min-height: 0 !important;
+  font-size: 13px !important; font-weight: 500 !important;
+  border-color: transparent !important; width: 100%; }
+[data-testid="stSidebar"] div[data-testid="stButton"] > button p,
+.st-key-dj_menu div[data-testid="stButton"] > button p {
+  text-align: left !important; width: 100%; }
+[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover,
+.st-key-dj_menu div[data-testid="stButton"] > button:hover {
+  background: var(--panel) !important; border-color: var(--border) !important;
+  color: var(--accent) !important; }
+/* The selected tool. Streamlit's own "primary" type carries the state, so no
+   per-button container is needed - those containers were what created the big
+   vertical gaps, one block gap per tool. */
+[data-testid="stSidebar"] [data-testid="stBaseButton-primary"],
+.st-key-dj_menu [data-testid="stBaseButton-primary"] {
+  background: var(--ink) !important; color: #fff !important;
   border-color: var(--ink) !important; font-weight: 600 !important; }
-.dj-nav-on button:hover { background: var(--ink) !important; color: #fff !important; }
+[data-testid="stSidebar"] [data-testid="stBaseButton-primary"]:hover,
+.st-key-dj_menu [data-testid="stBaseButton-primary"]:hover {
+  background: #000 !important; color: #fff !important; }
+/* Tighten the stack: the default 1rem block gap between 18 tools is enormous. */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"],
+.st-key-dj_menu [data-testid="stVerticalBlock"] { gap: 0.18rem !important; }
+[data-testid="stSidebar"] div[data-testid="stDownloadButton"] > button {
+  justify-content: center !important; text-align: center !important;
+  border-radius: 8px !important; }
 
 [data-testid="stFileUploaderDropzone"] { border: 1.5px dashed var(--accent) !important;
   background: #fff !important; border-radius: 10px !important; }
@@ -328,6 +350,12 @@ div[data-testid="stButton"] > button:hover {
 """,
     unsafe_allow_html=True,
 )
+
+# The generated-document styles. Without these the in-app document is raw HTML:
+# the header logo renders at natural size, every section icon fills the column
+# width as a huge black glyph, and the Course/Trainer/Date row runs together.
+# They were previously only injected into the print frame and the download file.
+st.markdown(f"<style>{render.DOC_CSS}</style>", unsafe_allow_html=True)
 
 
 # ----------------------------------------------------------------------------- chrome
@@ -405,6 +433,18 @@ def menu_in_main() -> bool:
         return False
 
 
+def _nav_button(key, current):
+    """One tool in the navigation list.
+
+    Deliberately NOT wrapped in st.container: a container per tool adds one
+    vertical block gap each, which stretched the 18-tool list down the page.
+    Streamlit's own primary/secondary type carries the selected state instead.
+    """
+    st.button(studio.TOOL_LABELS[key], key=f"navb_{key}", on_click=goto,
+              args=(key,), use_container_width=True,
+              type="primary" if key == current else "secondary")
+
+
 def render_menu(user=None, roles=None):
     """Draw the navigation panel wherever it can actually be seen."""
     if menu_in_main():
@@ -451,16 +491,7 @@ def render_sidebar(user=None, roles=None, container=None):
             st.markdown(f'<div class="dj-sb-group">{group}</div>',
                         unsafe_allow_html=True)
             for key in shown:
-                cls = "dj-nav-on" if key == current else ""
-                with st.container(key=f"nav_{key}"):
-                    st.button(studio.TOOL_LABELS[key], key=f"navb_{key}",
-                              on_click=goto, args=(key,), use_container_width=True)
-                if cls:
-                    st.markdown(
-                        f'<style>.st-key-nav_{key} button{{background:var(--ink)!important;'
-                        'color:#fff!important;border-color:var(--ink)!important;'
-                        'font-weight:600!important;}</style>',
-                        unsafe_allow_html=True)
+                _nav_button(key, current)
 
         st.markdown('<div class="dj-sb-label">Go to</div>', unsafe_allow_html=True)
         for key in ("ask", "library", "admin"):
@@ -468,15 +499,7 @@ def render_sidebar(user=None, roles=None, container=None):
                 continue
             if key == "library" and not store.enabled():
                 continue
-            with st.container(key=f"nav_{key}"):
-                st.button(studio.TOOL_LABELS[key], key=f"navb_{key}",
-                          on_click=goto, args=(key,), use_container_width=True)
-            if key == current:
-                st.markdown(
-                    f'<style>.st-key-nav_{key} button{{background:var(--ink)!important;'
-                    'color:#fff!important;border-color:var(--ink)!important;'
-                    'font-weight:600!important;}</style>',
-                    unsafe_allow_html=True)
+            _nav_button(key, current)
 
         # --- Document details ------------------------------------------------
         with st.expander("Document details"):
@@ -811,7 +834,7 @@ def _hide_streamlit_badge():
         (function(){
           function scrub(d){ if(!d) return; try{
             d.querySelectorAll('a[href*="streamlit.io"],a[href*="streamlit.app"]').forEach(function(a){a.style.display='none';if(a.parentElement){a.parentElement.style.display='none';}});
-            Array.prototype.forEach.call(d.querySelectorAll('button,a,span'),function(el){if(el.childElementCount===0){var t=(el.textContent||'').trim();if(t==='Fullscreen'||t==='Built with Streamlit'){var p=el.closest('div');if(p){p.style.display='none';}}}});
+            Array.prototype.forEach.call(d.querySelectorAll('button,a,span'),function(el){if(el.childElementCount===0){var t=(el.textContent||'').trim();if(t==='Fullscreen'||t==='Built with Streamlit'||t==='Manage app'){var p=el.closest('div');if(p){p.style.display='none';}}}});
           }catch(e){} }
           function doc(){ try{ if(window.parent&&window.parent!==window){ return window.parent.document; } }catch(e){} return document; }
           function kill(){ scrub(doc()); scrub(document); }
