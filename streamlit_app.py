@@ -25,7 +25,7 @@ from chatbot import (admin, auth, config, documents, feedback, guardrails, llm,
 
 # Shown in the sidebar footer. BUMP THIS ON EVERY CHANGE - it is the only way to
 # tell from the browser whether Streamlit Cloud has actually picked up a push.
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 
 # ----------------------------------------------------------------------------- assets
@@ -103,10 +103,10 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
   border-radius: 8px; background: #fff; }
 .st-key-dj_menu [data-testid="stExpander"] summary { font-family: 'Oswald', sans-serif;
   font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
-.st-key-dj_menu div[data-testid="stButton"] > button { border-radius: 6px !important;
+.st-key-dj_menu div[data-testid="stButton"] button { border-radius: 6px !important;
   text-align: left !important; padding: 6px 11px !important; font-size: 13px !important;
   border-color: transparent !important; }
-.st-key-dj_menu div[data-testid="stButton"] > button:hover {
+.st-key-dj_menu div[data-testid="stButton"] button:hover {
   background: var(--panel) !important; border-color: var(--border) !important; }
 
 .block-container { max-width: 860px; padding-top: 1.6rem; padding-bottom: 6rem; }
@@ -212,11 +212,11 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 
 /* ---- Buttons ---- */
 .dj-intro { color: var(--muted); font-size: 14.5px; margin: 6px 0 14px; }
-div[data-testid="stButton"] > button {
+div[data-testid="stButton"] button {
   border: 1px solid var(--border); background: #fff; color: var(--ink);
   border-radius: 999px; padding: 8px 16px; font-size: 13.5px; font-weight: 500;
   text-align: left; transition: all .15s; }
-div[data-testid="stButton"] > button:hover {
+div[data-testid="stButton"] button:hover {
   border-color: var(--accent); color: var(--accent); background: #fff; }
 .st-key-new_chat button { border: 1.5px solid var(--accent) !important;
   color: var(--accent) !important; text-align: center !important; }
@@ -291,21 +291,25 @@ div[data-testid="stButton"] > button:hover {
 .dj-sb-ver { color: #9a9a9a; font-size: 10px; letter-spacing: .4px; margin-top: 18px; text-align: center; }
 
 /* Navigation buttons: flat, left-aligned, tightly stacked, one click each.
-   Streamlit buttons are flex containers, so text-align does nothing - the label
-   is centred by justify-content and only justify-content can move it. */
-[data-testid="stSidebar"] div[data-testid="stButton"] > button,
-.st-key-dj_menu div[data-testid="stButton"] > button {
+   DESCENDANT combinators, not "> button", on purpose: Streamlit versions differ
+   in whether a wrapper div sits between [data-testid="stButton"] and the button
+   element. A child combinator silently matched nothing on Streamlit Cloud while
+   working locally, which is why the labels stayed centred there.
+   Streamlit buttons are flex containers, so text-align alone does nothing - the
+   label is centred by justify-content, and every level that could carry that
+   centring is pinned below. */
+[data-testid="stSidebar"] div[data-testid="stButton"] button,
+.st-key-dj_menu div[data-testid="stButton"] button {
   justify-content: flex-start !important; text-align: left !important;
   border-radius: 6px !important; padding: 5px 11px !important; min-height: 0 !important;
   font-size: 13px !important; font-weight: 500 !important;
   border-color: transparent !important; width: 100%; }
-/* Streamlit renders the label inside a <div> in some versions and a <p> in
-   others; pin both so alignment can't regress with an upgrade. */
-[data-testid="stSidebar"] div[data-testid="stButton"] > button > *,
-.st-key-dj_menu div[data-testid="stButton"] > button > * {
-  text-align: left !important; width: 100%; }
-[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover,
-.st-key-dj_menu div[data-testid="stButton"] > button:hover {
+[data-testid="stSidebar"] div[data-testid="stButton"] button *,
+.st-key-dj_menu div[data-testid="stButton"] button * {
+  justify-content: flex-start !important; text-align: left !important;
+  width: 100%; margin-right: auto; }
+[data-testid="stSidebar"] div[data-testid="stButton"] button:hover,
+.st-key-dj_menu div[data-testid="stButton"] button:hover {
   background: var(--panel) !important; border-color: var(--border) !important;
   color: var(--accent) !important; }
 /* The selected tool. Streamlit's own "primary" type carries the state, so no
@@ -321,7 +325,7 @@ div[data-testid="stButton"] > button:hover {
 /* Tighten the stack: the default 1rem block gap between 18 tools is enormous. */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"],
 .st-key-dj_menu [data-testid="stVerticalBlock"] { gap: 0.18rem !important; }
-[data-testid="stSidebar"] div[data-testid="stDownloadButton"] > button {
+[data-testid="stSidebar"] div[data-testid="stDownloadButton"] button {
   justify-content: center !important; text-align: center !important;
   border-radius: 8px !important; }
 

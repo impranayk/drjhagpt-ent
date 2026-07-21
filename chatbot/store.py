@@ -230,8 +230,12 @@ def list_events(limit: int = 200) -> List[dict]:
 # =============================================================================
 #  Shared library
 # =============================================================================
-def visible_to(item: dict, track: Optional[str], author: str = None) -> bool:
-    """Whether a library item should be shown to someone on `track`."""
+def visible_to(item: dict, track: Optional[str], author: str = None,
+               username: str = None, batches: list = None) -> bool:
+    """Whether a library item should be shown to this person.
+
+    An item can be aimed at whole tracks, at named people, or at a batch.
+    """
     targets = item.get("tracks") or []
     if isinstance(targets, str):
         targets = [targets]
@@ -239,20 +243,78 @@ def visible_to(item: dict, track: Optional[str], author: str = None) -> bool:
         return True
     if track and track in targets:
         return True
+    people = item.get("people") or []
+    if isinstance(people, str):
+        people = [people]
+    if username and username in people:
+        return True
+    item_batch = item.get("batch_code")
+    if item_batch and batches and item_batch in batches:
+        return True
     return bool(author) and item.get("author") == author
+
+
+# --- Batches -----------------------------------------------------------------
+def list_batches(active_only: bool = False) -> List[dict]:
+    params = {"select": "*", "order": "created_at.desc"}
+    if active_only:
+        params["active"] = "is.true"
+    return _get("batches", params)
+
+
+def next_batch_code(track_code: str, when: str) -> str:
+    """A stable, human-readable batch code: TRACK-YYMM-NN.
+
+    `when` is 'YYYY-MM-DD' - passed in rather than read from the clock so the
+    caller controls it and the result is reproducible.
+    """
+    prefix = (track_code or "GEN").strip().upper()[:6]
+    try:
+        yy, mm = when.split("-")[0][2:], when.split("-")[1]
+    except (AttributeError, IndexError):
+        yy, mm = "00", "00"
+    stem = f"{prefix}-{yy}{mm}"
+    try:
+        existing = {b.get("code", "") for b in list_batches()}
+    except Exception:
+        existing = set()
+    for n in range(1, 100):
+        code = f"{stem}-{n:02d}"
+        if code not in existing:
+            return code
+    return f"{stem}-99"
+
+
+def create_batch(*, code, name, track_code=None, course=None, starts_on=None,
+                 ends_on=None, trainer=None) -> dict:
+    row = {"code": code.strip().upper(), "name": name.strip(), "active": True}
+    for key, val in (("track_code", track_code), ("course", course),
+                     ("starts_on", starts_on), ("ends_on", ends_on),
+                     ("trainer", trainer)):
+        if val:
+            row[key] = val
+    return _insert("batches", row)
+
+
+def update_batch(code: str, **fields) -> list:
+    return _patch("batches", {"code": f"eq.{code.strip().upper()}"}, fields)
 
 
 def publish(*, author, tool, title, content_md, tracks, course=None, cohort=None,
             tech_area=None, product_version=None, tags=None, attachment_url=None,
-            meeting=None, status="published") -> dict:
+            meeting=None, status="published", people=None, batch_code=None,
+            video_url=None) -> dict:
     row = {
         "author": author, "tool": tool, "title": (title or "Untitled")[:200],
         "content_md": content_md, "tracks": list(tracks or []), "status": status,
     }
+    if people:
+        row["people"] = list(people)
     for key, val in (("course", course), ("cohort", cohort),
                      ("tech_area", tech_area), ("product_version", product_version),
                      ("tags", tags), ("attachment_url", attachment_url),
-                     ("meeting", meeting)):
+                     ("meeting", meeting), ("batch_code", batch_code),
+                     ("video_url", video_url)):
         if val:
             row[key] = val
     return _insert("library", row)

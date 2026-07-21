@@ -298,22 +298,75 @@ def add_history(tool_key: str, title: str, md: str):
 
 
 # --- Publish to the shared library ------------------------------------------
+MEETING_PLATFORMS = ["— none —", "Zoom", "Microsoft Teams", "Google Meet",
+                     "Webex", "Other"]
+
+
+def _safe_url(u: str) -> bool:
+    """Plain http(s) only. html.escape stops attribute breakout but NOT a
+    'javascript:' scheme, so author-supplied links are checked here."""
+    return (u or "").strip().lower().startswith(("http://", "https://"))
+
+
 def _publish_ui(tool_key: str, md: str, title: str):
     codes = auth.publish_targets()
     labels = store.track_label_map()
+    try:
+        people = [u for u in store.list_users() if u.get("active", True)]
+    except Exception:
+        people = []
+    try:
+        batches = [b for b in store.list_batches() if b.get("active", True)]
+    except Exception:
+        batches = []
+
     with st.expander("Publish to the shared library"):
         with st.form(f"pub::{tool_key}", clear_on_submit=False):
             c1, c2 = st.columns(2)
             course = c1.text_input("Course / programme",
                                    value=st.session_state.get("meta_course", ""),
                                    key=f"pubc::{tool_key}")
-            cohort = c2.text_input("Batch / cohort (optional)", key=f"pubb::{tool_key}")
+            batch_opts = ["— none —"] + [b["code"] for b in batches]
+            batch_label = {b["code"]: f"{b['code']} · {b.get('name', '')}"
+                           for b in batches}
+            batch = c2.selectbox(
+                "Batch", batch_opts, key=f"pubb::{tool_key}",
+                format_func=lambda c: batch_label.get(c, c),
+                help="Create batches in the Admin Console. Sharing to a batch "
+                     "reaches everyone assigned to it.")
             picked = st.multiselect(
-                "Share with", codes, default=[codes[0]] if codes else [],
+                "Share with (tracks)", codes,
+                default=[codes[0]] if codes else [],
                 format_func=lambda c: "All tracks" if c == "all" else labels.get(c, c),
                 key=f"pubt::{tool_key}")
+            picked_people = st.multiselect(
+                "Share with (specific people)",
+                [u["username"] for u in people],
+                format_func=lambda u: next(
+                    (f"{p.get('name', u)} · "
+                     f"{config.ROLE_LABELS.get(p.get('role'), p.get('role', ''))}"
+                     for p in people if p["username"] == u), u),
+                key=f"pubp::{tool_key}",
+                help="Optional. Use this to send something to named trainers "
+                     "regardless of their track.")
             tags = st.text_input("Tags (comma-separated, optional)",
                                  key=f"pubg::{tool_key}")
+
+            st.markdown("**Session links (optional)**")
+            m1, m2 = st.columns([1, 2])
+            platform = m1.selectbox("Meeting", MEETING_PLATFORMS,
+                                    key=f"pubmp::{tool_key}")
+            meet_url = m2.text_input("Meeting link", key=f"pubmu::{tool_key}",
+                                     placeholder="https://…")
+            m3, m4 = st.columns(2)
+            meet_id = m3.text_input("Meeting ID", key=f"pubmi::{tool_key}")
+            meet_pass = m4.text_input("Passcode", key=f"pubmk::{tool_key}")
+            video_url = st.text_input(
+                "Recording / YouTube link", key=f"pubv::{tool_key}",
+                placeholder="https://youtu.be/…",
+                help="Shown as a Watch button on the shared item. One per line "
+                     "for several videos.")
+
             attach = st.file_uploader("Attach a file (optional)",
                                       key=f"puba::{tool_key}")
             to_site = False
@@ -324,9 +377,19 @@ def _publish_ui(tool_key: str, md: str, title: str):
             go = st.form_submit_button("Publish", use_container_width=True)
         if not go:
             return
-        if not picked:
-            st.error("Choose at least one track to share with.")
+        if not picked and not picked_people and batch == "— none —":
+            st.error("Choose at least one track, person or batch to share with.")
             return
+        for label, u in (("Meeting link", meet_url), ("Recording link", video_url)):
+            for one in (u or "").splitlines():
+                if one.strip() and not _safe_url(one):
+                    st.error(f"{label} must start with http:// or https://.")
+                    return
+        meeting = None
+        if platform != "— none —" or meet_url:
+            meeting = json.dumps({"platform": None if platform == "— none —" else platform,
+                                  "url": meet_url.strip(), "id": meet_id.strip(),
+                                  "passcode": meet_pass.strip()})
         url = None
         if attach is not None:
             url = store.upload_file(attach.getvalue(), attach.name)
@@ -336,10 +399,13 @@ def _publish_ui(tool_key: str, md: str, title: str):
             store.publish(
                 author=auth.session().get("username", "anon"), tool=tool_key,
                 title=title, content_md=md, tracks=picked,
-                course=course or None, cohort=cohort or None,
+                people=picked_people or None,
+                batch_code=None if batch == "— none —" else batch,
+                course=course or None,
                 tech_area=st.session_state.get(f"area::{tool_key}"),
                 product_version=st.session_state.get("meta_version") or None,
-                tags=tags or None, attachment_url=url)
+                tags=tags or None, attachment_url=url,
+                meeting=meeting, video_url=video_url.strip() or None)
             store.log_event(auth.session().get("username", "anon"), "publish",
                             detail=tool_key, track=auth.track())
             st.success("Published to the shared library.")
@@ -415,7 +481,7 @@ def emit(tool_key: str, submitted: bool, prompt: str, filename_base: str,
     # run the Mermaid script), so the document is drawn in segments.
     for kind, val in render.doc_segments(md, logo, meta, config.BRAND_FULL):
         if kind == "mermaid":
-            components.html(render.mermaid_frame(val), height=470, scrolling=True)
+            components.html(render.mermaid_frame(val), height=340, scrolling=True)
         else:
             st.markdown(val, unsafe_allow_html=True)
 

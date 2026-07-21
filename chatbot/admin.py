@@ -22,6 +22,50 @@ def _role_chip(role):
     return _chip(config.ROLE_LABELS.get(role, role), kind)
 
 
+def _safe(u: str) -> bool:
+    return (u or "").strip().lower().startswith(("http://", "https://"))
+
+
+def _render_links(item: dict):
+    """Join-meeting, recording and attachment buttons on a shared item."""
+    import json
+
+    bits = []
+    meeting = item.get("meeting")
+    if meeting:
+        try:
+            m = json.loads(meeting)
+        except (ValueError, TypeError):
+            m = {}
+        url = (m.get("url") or "").strip()
+        if url and _safe(url):
+            label = m.get("platform") or "meeting"
+            bits.append(f'<a class="dj-share-a" href="{_html.escape(url)}" '
+                        f'target="_blank" rel="noopener">Join {_html.escape(label)}</a>')
+        detail = " · ".join(
+            f"{k}: {_html.escape(str(m.get(k)))}" for k in ("id", "passcode")
+            if m.get(k))
+    else:
+        detail = ""
+
+    for i, v in enumerate((item.get("video_url") or "").splitlines()):
+        v = v.strip()
+        if v and _safe(v):
+            n = f" {i + 1}" if i else ""
+            bits.append(f'<a class="dj-share-a" href="{_html.escape(v)}" '
+                        f'target="_blank" rel="noopener">Watch{n}</a>')
+
+    if item.get("attachment_url") and _safe(item["attachment_url"]):
+        bits.append(f'<a class="dj-share-a" href="{_html.escape(item["attachment_url"])}" '
+                    'target="_blank" rel="noopener">Download attachment</a>')
+
+    if bits:
+        st.markdown('<div class="dj-share">' + "".join(bits) + "</div>",
+                    unsafe_allow_html=True)
+    if detail:
+        st.caption(detail)
+
+
 def _needs_db():
     st.info("The shared library and Admin Console need a database. Add "
             "`SUPABASE_URL` and `SUPABASE_KEY` to your secrets — see "
@@ -46,7 +90,13 @@ def tool_library():
 
     me = auth.session().get("username", "")
     my_track = auth.track()
-    visible = [i for i in items if store.visible_to(i, my_track, me)]
+    try:
+        my_batches = [b["code"] for b in store.list_batches()
+                      if b.get("track_code") == my_track or auth.is_lead()]
+    except Exception:
+        my_batches = []
+    visible = [i for i in items
+               if store.visible_to(i, my_track, me, username=me, batches=my_batches)]
     if not visible:
         st.caption("Nothing has been shared with your track yet.")
         return
@@ -90,15 +140,12 @@ def tool_library():
             for kind, val in render.doc_segments(body, studio._logo_uri(), None,
                                                  config.BRAND_FULL):
                 if kind == "mermaid":
-                    components.html(render.mermaid_frame(val), height=470,
+                    components.html(render.mermaid_frame(val), height=340,
                                     scrolling=True)
                 else:
                     st.markdown(val, unsafe_allow_html=True)
 
-            if item.get("attachment_url"):
-                st.markdown(f'<a class="dj-share-a" href="{item["attachment_url"]}" '
-                            'target="_blank" rel="noopener">Download attachment</a>',
-                            unsafe_allow_html=True)
+            _render_links(item)
 
             b1, b2, b3 = st.columns(3)
             with b1:
@@ -146,16 +193,97 @@ def tool_admin():
         pending = len(store.list_access_requests(status="pending"))
     except Exception:
         pending = 0
-    tabs = st.tabs(["People", "Tracks", f"Requests ({pending})", "Activity"])
+    tabs = st.tabs(["People", "Categories", "Batches", f"Requests ({pending})",
+                    "Activity"])
 
     with tabs[0]:
         _people_tab()
     with tabs[1]:
         _tracks_tab()
     with tabs[2]:
-        _requests_tab()
+        _batches_tab()
     with tabs[3]:
+        _requests_tab()
+    with tabs[4]:
         _activity_tab()
+
+
+def _batches_tab():
+    """Course batches, with an auto-generated code per batch."""
+    import datetime as _dt
+
+    try:
+        batches = store.list_batches()
+    except Exception as exc:
+        st.error(f"Couldn't load batches: {exc}. If this is the first time, run "
+                 "the batches SQL from SUPABASE_SETUP.md.")
+        return
+
+    labels = store.track_label_map()
+    if batches:
+        st.markdown(
+            '<div class="dj-people">' + "".join(
+                f'<div class="dj-person"><div><b>{_html.escape(b.get("name") or "")}</b>'
+                f'<span class="dj-person-u">{_html.escape(b.get("code") or "")}</span></div>'
+                f'<div>{_chip(labels.get(b.get("track_code"), b.get("track_code") or "—"), "t")}'
+                f'{_chip(b.get("starts_on") or "no date", "n")}'
+                f'{_chip("active" if b.get("active", True) else "closed", "s" if b.get("active", True) else "d")}'
+                "</div></div>" for b in batches) + "</div>",
+            unsafe_allow_html=True)
+    else:
+        st.caption("No batches yet. Create one below and it gets a code "
+                   "automatically.")
+
+    codes = store.track_codes()
+    with st.form("adm_add_batch", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        name = c1.text_input("Batch name", placeholder="VCF 9 Admin — July weekend")
+        with c2:
+            track = st.selectbox(
+                "Category", codes, key="adm_batch_track",
+                format_func=lambda c: labels.get(c, c))
+        c3, c4 = st.columns(2)
+        starts = c3.date_input("Starts", value=_dt.date.today(), key="adm_batch_start")
+        ends = c4.date_input("Ends", value=_dt.date.today(), key="adm_batch_end")
+        course = st.text_input("Course (optional)")
+        st.caption("The code is generated automatically as "
+                   "CATEGORY-YYMM-NN, e.g. VMW-2607-01.")
+        go = st.form_submit_button("Create batch", use_container_width=True)
+    if go:
+        if not name.strip():
+            st.error("A batch name is required.")
+            return
+        try:
+            code = store.next_batch_code(track, starts.isoformat())
+            store.create_batch(code=code, name=name, track_code=track,
+                               course=course or None, starts_on=starts.isoformat(),
+                               ends_on=ends.isoformat(),
+                               trainer=auth.session().get("username"))
+            store.log_event(auth.session().get("username"), "create_batch",
+                            detail=code)
+            st.success(f"Created batch {code}.")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Couldn't create the batch: {exc}")
+
+    if batches:
+        with st.expander("Close or reopen a batch"):
+            pick = st.selectbox("Batch", [b["code"] for b in batches],
+                                format_func=lambda c: next(
+                                    (f"{c} · {b.get('name', '')}" for b in batches
+                                     if b["code"] == c), c))
+            row = next((b for b in batches if b["code"] == pick), {})
+            active = st.checkbox("Active", value=bool(row.get("active", True)),
+                                 key="adm_batch_active")
+            if st.button("Save", key="adm_batch_save", use_container_width=True):
+                try:
+                    store.update_batch(pick, active=active)
+                    store.log_event(auth.session().get("username"), "update_batch",
+                                    detail=pick)
+                    st.success("Saved.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Couldn't save: {exc}")
 
 
 def _track_picker(label, key, current=None, allow_none=True):

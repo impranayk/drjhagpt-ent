@@ -526,9 +526,21 @@ def mermaid_frame(source: str, height: int = 460) -> str:
         'fontSize:"13px",primaryColor:"#f5f5f5",primaryTextColor:"#141618",'
         'primaryBorderColor:"#141618",lineColor:"#ce242c",'
         'secondaryColor:"#fdeaeb",tertiaryColor:"#ffffff"}});'
+        # A component frame is a fixed box, so a short diagram used to leave a
+        # large blank gap under it. Streamlit's own resize protocol works from a
+        # components.html iframe too, so the frame reports its real height once
+        # the SVG exists and the gap disappears.
+        # Measure the wrapper, not documentElement: scrollHeight includes the
+        # frame's own viewport and over-reported by ~130px, which is exactly the
+        # blank gap that appeared under short diagrams.
+        'function fit(){try{var w=document.querySelector(".wrap");'
+        'var h=Math.ceil(w?w.getBoundingClientRect().height:document.body.scrollHeight)+6;'
+        'window.parent.postMessage({type:"streamlit:setFrameHeight",height:h},"*");'
+        '}catch(e){}}'
         'const el=document.getElementById("d");const src=el.textContent;'
-        'mermaid.render("g0",src).then(function(r){el.innerHTML=r.svg;})'
-        '.catch(function(e){el.parentElement.parentElement.innerHTML='
+        'mermaid.render("g0",src).then(function(r){el.innerHTML=r.svg;'
+        'fit();setTimeout(fit,120);setTimeout(fit,400);})'
+        '.catch(function(e){setTimeout(fit,60);el.parentElement.parentElement.innerHTML='
         '"<div class=\'err\'>This diagram could not be drawn. '
         'Use <b>Regenerate</b>, or copy the source below into mermaid.live:"'
         '+"<pre>"+src.replace(/[<>&]/g,function(c){return {"<":"&lt;",">":"&gt;",'

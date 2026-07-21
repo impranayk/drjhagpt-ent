@@ -143,6 +143,19 @@ on conflict (code) do nothing;
 
 </details>
 
+### Batches, per-person sharing and session links
+
+If you set the database up before those features existed, run
+**[`supabase_migration_batches.sql`](supabase_migration_batches.sql)** as well.
+It is guarded and safe to re-run. It adds:
+
+- `dj_batches` — course batches, each with an auto-generated code in the form
+  `CATEGORY-YYMM-NN` (e.g. `VMW-2607-01`), created from **Admin Console →
+  Batches**;
+- `dj_library.people` — share an item with named trainers;
+- `dj_library.batch_code` — share an item with everyone on a batch;
+- `dj_library.video_url` — recording / YouTube links.
+
 ## 3. Add the secrets
 
 **Project Settings → API**, then copy:
