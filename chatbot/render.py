@@ -226,6 +226,15 @@ def clean_mermaid(src: str) -> str:
         # Edge labels: '-->| manages |' is tolerated, but the padded form trips
         # some versions. Normalise to the canonical '-->|manages|'.
         ln = re.sub(r"\|\s+([^|\n]*?)\s+\|", r"|\1|", ln)
+        # '-->|manages|> nsx1' - the model closes the label and then repeats the
+        # arrowhead. Observed live; it is a parse error, so the whole diagram
+        # renders as nothing.
+        ln = re.sub(r"\|\s*>", "|", ln)
+        # A line that STARTS with an arrow has no source node ('-->|connect to| vc1').
+        # Also observed live. There is nothing to infer, so drop the statement
+        # rather than let it kill every other node in the diagram.
+        if re.match(r"^\s*(-{2,}>|-{3,}|-\.->|={2,}>|~~~)", ln):
+            continue
         lines.append(ln)
     s = "\n".join(lines).strip()
     if not s:

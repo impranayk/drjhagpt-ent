@@ -23,8 +23,9 @@ import streamlit as st
 from chatbot import (admin, auth, config, documents, feedback, guardrails, llm,
                      observability, rag, render, retrieval, store, studio, tools)
 
-# Shown in the sidebar footer. Bump this on every change to confirm a deploy.
-APP_VERSION = "1.0.0"
+# Shown in the sidebar footer. BUMP THIS ON EVERY CHANGE - it is the only way to
+# tell from the browser whether Streamlit Cloud has actually picked up a push.
+APP_VERSION = "1.1.0"
 
 
 # ----------------------------------------------------------------------------- assets
@@ -250,6 +251,10 @@ div[data-testid="stButton"] > button:hover {
 .dj-sb-title span { color: var(--accent); }
 .dj-sb-sub { font-family: 'Inter', sans-serif; font-style: italic; color: var(--accent); font-size: 10.5px; margin-top: 2px; }
 .dj-sb-rule { height: 2px; background: var(--accent); border: 0; margin: 10px 0 12px; width: 100%; }
+.dj-sb-sep { height: 1px; background: var(--border); border: 0; margin: 22px 0 0; width: 100%; }
+/* Sidebar labels sit in their own element container; give the separator the
+   same treatment so it isn't swallowed by the block above it. */
+[data-testid="stSidebar"] .stElementContainer:has(.dj-sb-sep) { margin: 10px 0 0 !important; }
 /* Section labels.
    Spacing MUST go on the element container, not on the label itself. Streamlit
    sizes an element's container from the text's line box and ignores any padding
@@ -472,6 +477,17 @@ def _initials(name: str) -> str:
     return (parts[0][:1] + parts[-1][:1]).upper()
 
 
+def _elide(text: str, limit: int) -> str:
+    """Shorten to `limit`, breaking on a word so labels don't end mid-syllable."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rstrip()
+    if " " in cut[limit // 2:]:
+        cut = cut[:cut.rfind(" ")].rstrip()
+    return cut.rstrip(" -–—·,;:") + "…"
+
+
 def _nav_button(key, current):
     """One tool in the navigation list.
 
@@ -532,13 +548,12 @@ def render_sidebar(user=None, roles=None, container=None):
             for key in shown:
                 _nav_button(key, current)
 
-        st.markdown('<div class="dj-sb-label">Go to</div>', unsafe_allow_html=True)
-        for key in ("ask", "library", "admin"):
-            if key not in available:
-                continue
-            if key == "library" and not store.enabled():
-                continue
-            _nav_button(key, current)
+        _shared = [k for k in ("library", "admin") if k in available
+                   and not (k == "library" and not store.enabled())]
+        if _shared:
+            st.markdown('<div class="dj-sb-label">Team</div>', unsafe_allow_html=True)
+            for key in _shared:
+                _nav_button(key, current)
 
         # --- Document details ------------------------------------------------
         with st.expander("Document details"):
@@ -552,41 +567,58 @@ def render_sidebar(user=None, roles=None, container=None):
                           help="Also printed on every document you export.")
             st.date_input("Date", key="meta_date", value=_dt.date.today())
 
-        # --- Options ---------------------------------------------------------
-        st.markdown('<div class="dj-sb-label">Options</div>', unsafe_allow_html=True)
+        # --- Assistant --------------------------------------------------------
+        st.markdown('<div class="dj-sb-label">Assistant</div>', unsafe_allow_html=True)
         opts = studio.allowed_models()
         cur = st.session_state.get("model", config.LLM_MODEL)
         st.session_state["model"] = st.selectbox(
-            "Assistant", opts, index=opts.index(cur) if cur in opts else 0,
-            format_func=_model_label)
+            "Model", opts, index=opts.index(cur) if cur in opts else 0,
+            format_func=_model_label, label_visibility="collapsed")
 
-        _ingest_uploads(st.file_uploader("Ground in a PDF", type=["pdf"],
-                                         accept_multiple_files=True))
+        # --- Recent (collapsible; long titles get elided on a word boundary) ---
+        hist = st.session_state.get("dj_history") or []
+        if hist:
+            with st.expander(f"Recent ({len(hist)})", expanded=False):
+                for i, h in enumerate(hist[:10]):
+                    if st.button(f"{h['label']} · {_elide(h['title'], 30)}",
+                                 key=f"hist{i}", use_container_width=True,
+                                 help=h["title"]):
+                        st.session_state["tool"] = h["tool"]
+                        st.session_state[f"out::{h['tool']}"] = h["md"]
+                        st.rerun()
+                if st.button("Clear recent", key="hist_clear",
+                             use_container_width=True):
+                    st.session_state.pop("dj_history", None)
+                    st.rerun()
+
+        # --- Ask: the original assistant --------------------------------------
+        # Kept together and last, deliberately. These are the controls from the
+        # first version of DrJhaGPT and they belong to the chat, not the studio
+        # generators - interleaving them made it unclear what applied to what.
+        st.markdown('<hr class="dj-sb-sep">', unsafe_allow_html=True)
+        st.markdown('<div class="dj-sb-label">Ask · original assistant</div>',
+                    unsafe_allow_html=True)
+        if "ask" in available:
+            _nav_button("ask", current)
+        # Always visible: it was previously hidden unless the Ask tool was open,
+        # so it looked like the feature had been removed.
+        st.segmented_control("Answer from", ["Website + PDF", "Website", "PDF"],
+                             key="scope")
+        _ingest_uploads(st.file_uploader("Add a PDF", type=["pdf"],
+                                         accept_multiple_files=True,
+                                         help="Used by the chat, and by any "
+                                              "generator with 'Use my uploaded "
+                                              "documents' ticked."))
         docs = st.session_state.get("docs", {})
         for name, (chunks, _v) in docs.items():
-            st.caption(f"{name} — {len(chunks)} chunks")
+            st.caption(f"{_elide(name, 26)} — {len(chunks)} chunks")
         if docs and st.button("Clear documents", use_container_width=True):
             st.session_state.pop("docs", None)
             st.rerun()
-
-        if st.session_state.get("tool", "ask") == "ask":
-            st.segmented_control("Answer from", ["Website + PDF", "Website", "PDF"],
-                                 key="scope")
-            if st.session_state.get("messages"):
-                st.download_button("Export chat", data=_chat_markdown(),
-                                   file_name="drjhagpt-chat.md", mime="text/markdown",
-                                   use_container_width=True)
-
-        # --- Recent ----------------------------------------------------------
-        hist = st.session_state.get("dj_history") or []
-        if hist:
-            st.markdown('<div class="dj-sb-label">Recent</div>', unsafe_allow_html=True)
-            for i, h in enumerate(hist[:6]):
-                if st.button(f"{h['label']} · {h['title'][:26]}", key=f"hist{i}",
-                             use_container_width=True):
-                    st.session_state["tool"] = h["tool"]
-                    st.session_state[f"out::{h['tool']}"] = h["md"]
-                    st.rerun()
+        if st.session_state.get("messages"):
+            st.download_button("Export chat", data=_chat_markdown(),
+                               file_name="drjhagpt-chat.md", mime="text/markdown",
+                               use_container_width=True)
 
         # --- Status ----------------------------------------------------------
         kb = rag.has_knowledge()

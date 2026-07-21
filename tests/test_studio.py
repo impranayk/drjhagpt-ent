@@ -99,6 +99,22 @@ def test_clean_mermaid_repairs_the_mistakes_models_make():
     assert "%%" not in fixed
 
 
+def test_repairs_the_double_arrowhead_and_dangling_edge():
+    """Observed live (an NSX diagram that rendered as nothing): the model writes
+    '-->|manages|>' with a second arrowhead, and an edge line with no source."""
+    fixed = render.clean_mermaid(
+        "flowchart TD\n"
+        "    vc1[vCenter Server]\n"
+        "    nsx1[NSX Manager]\n"
+        "    -->|connect to|> vc1\n"
+        "    vc1 -->|manages|> nsx1\n"
+        "    subgraph mgmt[Management Plane]\n        nsx1\n    end\n")
+    assert "|>" not in fixed
+    assert "vc1 -->|manages| nsx1" in fixed
+    assert not any(l.strip().startswith("-->") for l in fixed.splitlines())
+    assert "subgraph mgmt[Management Plane]" in fixed and "end" in fixed
+
+
 def test_mermaid_source_without_a_declaration_gets_one():
     assert render.clean_mermaid("a[One] --> b[Two]").startswith("flowchart TD")
 
