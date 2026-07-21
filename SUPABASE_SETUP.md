@@ -32,7 +32,9 @@ project you're reusing and run the SQL below in it.
 
 ## 2. Run the SQL
 
-Open **SQL Editor → New query**, paste all of this, and run it.
+The schema lives in **[`supabase_schema.sql`](supabase_schema.sql)** — open it,
+copy the whole file, paste it into **SQL Editor → New query**, and run it once.
+It is the single source of truth; the excerpt below is only for reading.
 
 > Every table is prefixed **`dj_`** on purpose. Names like `app_users`, `events`
 > and `access_requests` are exactly what another app would also choose — and
@@ -40,6 +42,9 @@ Open **SQL Editor → New query**, paste all of this, and run it.
 > which would leave two apps reading each other's people. The prefix means this
 > app can safely share a project with, say, a Neevalay one. If you change
 > `DB_PREFIX`, change it here too.
+
+<details>
+<summary>What the schema creates</summary>
 
 ```sql
 -- Tracks: the practice a trainer belongs to, and the unit material is shared to.
@@ -136,6 +141,8 @@ insert into dj_tracks (code, name, focus) values
 on conflict (code) do nothing;
 ```
 
+</details>
+
 ## 3. Add the secrets
 
 **Project Settings → API**, then copy:
@@ -160,16 +167,31 @@ Reboot the app. The sidebar **Status** panel should now show
 
 ## 4. Bootstrap yourself as admin
 
-`ADMIN_USERS` (default `pranay`) is the bootstrap: whoever signs in with that
-username is treated as an admin regardless of what the database says, so you can
-never lock yourself out.
+Once the database is live it becomes the source of truth for logins, so you need
+one account in it before you can manage anything. Create it directly in SQL, so
+your password never leaves your machine and no hash is ever committed:
 
-1. Sign in with the account in `.streamlit/auth.yaml`, or add yourself there
-   first (`python scripts/make_hash.py "your-password"` generates the hash).
-2. Open **Admin Console → People → Add someone** and create your real account
-   with role **Admin**.
-3. Add your co-trainers. Each gets a temporary password they must replace at
-   first sign-in.
+1. Generate the hash locally:
+
+   ```bash
+   python scripts/make_hash.py "the-password-you-want"
+   ```
+
+2. Uncomment the `insert into dj_app_users` block at the bottom of
+   [`supabase_schema.sql`](supabase_schema.sql), paste your hash in place of
+   `PASTE_HASH_HERE`, and run just that block in the SQL Editor.
+
+3. Sign in as that user. **Admin Console → People → Add someone** to add your
+   co-trainers; each gets a temporary password they must replace at first
+   sign-in.
+
+`ADMIN_USERS` (default `pranay`) is the safety net on top of this: whoever signs
+in with that username is treated as an admin whatever the database says, so a bad
+role edit can't lock you out.
+
+> Don't put your own password hash into `.streamlit/auth.yaml` if this repo is
+> public — that file is committed. It exists for the no-database case and as the
+> fallback when Supabase is unreachable.
 
 ## 5. Optional — file attachments
 
