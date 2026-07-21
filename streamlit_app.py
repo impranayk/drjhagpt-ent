@@ -83,7 +83,28 @@ html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif; color: va
 [class*="_profileContainer"], [class*="profileContainer"], [data-testid="InputInstructions"],
 a[href*="streamlit.io"], a[href*="streamlit.app"] { display: none !important; }
 header[data-testid="stHeader"] { background: transparent; height: 0; }
+/* The sidebar-expand control lives inside that zero-height header, so it became
+   unreachable - which strands you on mobile (where the sidebar auto-collapses)
+   with no way to reach the tool list. Pin it to the viewport instead. */
+[data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"] {
+  position: fixed !important; top: 8px; left: 8px; z-index: 1000;
+  background: #fff !important; border: 1px solid var(--border) !important;
+  border-radius: 6px !important; box-shadow: 0 2px 8px rgba(20,22,24,.10); }
+[data-testid="stSidebarCollapsedControl"] svg,
+[data-testid="collapsedControl"] svg { color: var(--accent) !important; }
 .st-key-new_chat { margin-top: 6px; }
+
+/* Embedded mode: the same panel, moved into the main column. */
+.st-key-dj_menu { margin-bottom: 10px; }
+.st-key-dj_menu [data-testid="stExpander"] details { border: 1px solid var(--border);
+  border-radius: 8px; background: #fff; }
+.st-key-dj_menu [data-testid="stExpander"] summary { font-family: 'Oswald', sans-serif;
+  font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+.st-key-dj_menu div[data-testid="stButton"] > button { border-radius: 6px !important;
+  text-align: left !important; padding: 6px 11px !important; font-size: 13px !important;
+  border-color: transparent !important; }
+.st-key-dj_menu div[data-testid="stButton"] > button:hover {
+  background: var(--panel) !important; border-color: var(--border) !important; }
 
 .block-container { max-width: 860px; padding-top: 1.6rem; padding-bottom: 6rem; }
 
@@ -360,8 +381,42 @@ def _model_label(m: str) -> str:
     return friendly.get(m, m)
 
 
-def render_sidebar(user=None, roles=None):
-    with st.sidebar:
+def menu_in_main() -> bool:
+    """True when the navigation panel must be drawn in the main column.
+
+    Background, because this cost a live outage: `?embed=true` does not merely
+    collapse the sidebar - Streamlit never renders it, and renders no expand
+    control either. The whole studio navigation lives in the sidebar, so an
+    embedded app shows a chat box and nothing else.
+
+    It cannot be auto-detected: Streamlit's frontend CONSUMES `embed` and
+    `embed_options`, so they never reach `st.query_params`. The fix is therefore
+    to embed WITHOUT `embed=true` (the app's own CSS already hides the toolbar,
+    badge and deploy button, so it looks the same and the sidebar works).
+
+    `?menu=main` is the escape hatch: it forces the panel into the main column
+    for any host that must use embed mode. `mini` is the chat-only widget and
+    deliberately gets no menu.
+    """
+    try:
+        return (st.query_params.get("menu") == "main"
+                and "mini" not in st.query_params)
+    except Exception:
+        return False
+
+
+def render_menu(user=None, roles=None):
+    """Draw the navigation panel wherever it can actually be seen."""
+    if menu_in_main():
+        with st.container(key="dj_menu"):
+            with st.expander("Studio menu — tools, assistant, documents", expanded=False):
+                render_sidebar(user, roles, container=st.container())
+        return
+    render_sidebar(user, roles)
+
+
+def render_sidebar(user=None, roles=None, container=None):
+    with (container if container is not None else st.sidebar):
         logo = logo_data_uri()
         img = f'<img src="{logo}" alt="">' if logo else ""
         st.markdown(
@@ -825,7 +880,7 @@ def main():
     st.session_state.setdefault("tool", "ask")
     st.session_state.setdefault("scope", "Website + PDF")
 
-    render_sidebar(user, roles)
+    render_menu(user, roles)
     render_header()
 
     if config.IS_STAGING:
