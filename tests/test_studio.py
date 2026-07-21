@@ -160,6 +160,28 @@ def test_lead_only_and_associate_rules_are_disjointly_enforced(monkeypatch):
     assert "ask" in allowed and "lab" in allowed
 
 
+def test_user_chip_initials_skip_honorifics():
+    """"Dr. Pranay Jha" should read PJ on the user chip, not D."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("dj_app", APP)
+    # The app module runs Streamlit calls at import, so pull the helper's source
+    # rather than executing it.
+    import re as _re
+
+    src = Path(APP).read_text(encoding="utf-8")
+    ns = {"re": _re}
+    block = _re.search(r"_TITLES = \{.*?\n\ndef _nav_button", src, _re.S).group(0)
+    exec(block[:block.index("def _nav_button")], ns)
+    initials = ns["_initials"]
+
+    assert initials("Dr. Pranay Jha") == "PJ"
+    assert initials("Demo User") == "DU"
+    assert initials("Pranay") == "PR"
+    assert initials("Prof. A B Kumar") == "AK"
+    assert initials("") == "?"
+
+
 def test_tables_are_prefixed_so_a_project_can_be_shared():
     """Generic names would collide with a sibling app in the same Supabase
     project, and `create table if not exists` fails silently when they do."""

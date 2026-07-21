@@ -15,6 +15,7 @@ charcoal ink (#141618) with a red accent (#ce242c).
 import base64
 import datetime as _dt
 import html
+import re
 from functools import lru_cache
 
 import streamlit as st
@@ -249,15 +250,34 @@ div[data-testid="stButton"] > button:hover {
 .dj-sb-title span { color: var(--accent); }
 .dj-sb-sub { font-family: 'Inter', sans-serif; font-style: italic; color: var(--accent); font-size: 10.5px; margin-top: 2px; }
 .dj-sb-rule { height: 2px; background: var(--accent); border: 0; margin: 10px 0 12px; width: 100%; }
-.dj-sb-label { font-family: 'Oswald', sans-serif; color: var(--accent); font-size: 10.5px; letter-spacing: 2px;
-  font-weight: 600; text-transform: uppercase; margin: 16px 0 7px; }
-.dj-sb-group { font-family: 'Oswald', sans-serif; color: var(--muted); font-size: 9.5px; letter-spacing: 1.8px;
-  font-weight: 600; text-transform: uppercase; margin: 13px 0 5px; padding-left: 2px; }
+/* Section labels.
+   Spacing MUST go on the element container, not on the label itself. Streamlit
+   sizes an element's container from the text's line box and ignores any padding
+   or margin on the content, so spacing set here overflows the container and the
+   next button paints over the bottom half of the text - which reads as the label
+   being chopped in half. Measured: a 31px label sat in a 15px container, so it
+   ran 16px into the button below it. The :has() rules further down move the
+   spacing to the container, where it is actually accounted for. */
+.dj-sb-label { font-family: 'Oswald', sans-serif; color: var(--accent); font-size: 10.5px;
+  letter-spacing: 2px; font-weight: 600; text-transform: uppercase;
+  margin: 0; padding: 0; line-height: 1.6; }
+.dj-sb-group { font-family: 'Oswald', sans-serif; color: var(--muted); font-size: 9.5px;
+  letter-spacing: 1.8px; font-weight: 600; text-transform: uppercase;
+  margin: 0; padding: 0 2px; line-height: 1.6; }
+[data-testid="stSidebar"] .stElementContainer:has(.dj-sb-label),
+.st-key-dj_menu .stElementContainer:has(.dj-sb-label) { margin: 20px 0 19px !important; }
+[data-testid="stSidebar"] .stElementContainer:has(.dj-sb-group),
+.st-key-dj_menu .stElementContainer:has(.dj-sb-group) { margin: 15px 0 18px !important; }
+/* First label in the panel shouldn't push the whole list down. */
+[data-testid="stSidebar"] .stElementContainer:has(.dj-sb-label):first-of-type {
+  margin-top: 8px !important; }
 .dj-sb-user { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border);
   border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 11px; margin-bottom: 8px; font-size: 13px; color: var(--ink); }
 .dj-sb-user b { font-weight: 700; }
-.dj-sb-ava { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: #fff;
-  display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+.dj-sb-ava { width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 10px;
+  font-weight: 700; letter-spacing: .3px; flex: 0 0 auto; }
+.dj-sb-user b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dj-sb-badge { background: var(--accent); color: #fff; font-size: 9px; font-weight: 600; letter-spacing: .5px;
   text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-left: auto; }
 .dj-sb-status { font-size: 12px; color: var(--muted); line-height: 1.9; }
@@ -274,8 +294,10 @@ div[data-testid="stButton"] > button:hover {
   border-radius: 6px !important; padding: 5px 11px !important; min-height: 0 !important;
   font-size: 13px !important; font-weight: 500 !important;
   border-color: transparent !important; width: 100%; }
-[data-testid="stSidebar"] div[data-testid="stButton"] > button p,
-.st-key-dj_menu div[data-testid="stButton"] > button p {
+/* Streamlit renders the label inside a <div> in some versions and a <p> in
+   others; pin both so alignment can't regress with an upgrade. */
+[data-testid="stSidebar"] div[data-testid="stButton"] > button > *,
+.st-key-dj_menu div[data-testid="stButton"] > button > * {
   text-align: left !important; width: 100%; }
 [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover,
 .st-key-dj_menu div[data-testid="stButton"] > button:hover {
@@ -433,6 +455,23 @@ def menu_in_main() -> bool:
         return False
 
 
+_TITLES = {"dr", "mr", "mrs", "ms", "prof", "er", "shri", "smt"}
+
+
+def _initials(name: str) -> str:
+    """Initials for the user chip, ignoring honorifics.
+
+    "Dr. Pranay Jha" should read PJ, not D.
+    """
+    parts = [p for p in re.split(r"[\s.]+", name or "")
+             if p and p.lower() not in _TITLES]
+    if not parts:
+        return (name or "?").strip()[:1].upper() or "?"
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return (parts[0][:1] + parts[-1][:1]).upper()
+
+
 def _nav_button(key, current):
     """One tool in the navigation list.
 
@@ -473,7 +512,7 @@ def render_sidebar(user=None, roles=None, container=None):
             name = sess.get("name") or user
             st.markdown(
                 f'<div class="dj-sb-user"><span class="dj-sb-ava">'
-                f'{html.escape(name[:1].upper())}</span>'
+                f'{html.escape(_initials(name))}</span>'
                 f'<b>{html.escape(name)}</b>'
                 f'<span class="dj-sb-badge">{html.escape(role)}</span></div>',
                 unsafe_allow_html=True,
