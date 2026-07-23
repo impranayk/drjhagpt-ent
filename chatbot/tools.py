@@ -437,6 +437,66 @@ def tool_cheatsheet():
 
 
 # =============================================================================
+#  Write yourself (no AI, no tokens)
+# =============================================================================
+def tool_notes():
+    _blurb("notes")
+    st.caption("This tool uses no AI and spends no quota — it just formats and "
+               "shares what you write. Markdown works: `# Heading`, `- bullet`, "
+               "`**bold**`, tables, and ``` code fences.")
+    with st.form("f_notes"):
+        title = st.text_input("Title", placeholder="Upgrade notes — vCenter 8 U3")
+        body = st.text_area("Your notes", height=320,
+                            placeholder="# Heading\n\nWrite anything here…")
+        go = st.form_submit_button("Format it", use_container_width=True)
+
+    if go and not studio.require(("Title", title), ("Your notes", body)):
+        return
+    md = f"# {title.strip()}\n\n{body.strip()}" if go else None
+    studio.emit("notes", go, "", _slug(title or "notes"),
+                title or "My Notes", raw_md=md, allow_refine=False)
+
+
+LETTER_KINDS = ["Blank letterhead (print and write on)", "Letter",
+                "Memo / notice", "Certificate of participation"]
+
+
+def tool_letter():
+    _blurb("letter")
+    st.caption("A branded page with your logo, header and footer — no AI, no "
+               "quota. Leave the body empty for a blank letterhead to print.")
+    with st.form("f_letter"):
+        kind = st.selectbox("Type", LETTER_KINDS)
+        c1, c2 = st.columns(2)
+        to = c1.text_input("To (optional)", placeholder="Name / team")
+        ref = c2.text_input("Reference / subject (optional)")
+        body = st.text_area("Body (optional — leave blank for a printable sheet)",
+                            height=240)
+        sign = st.text_input("Signed (optional)",
+                             value=st.session_state.get("meta_trainer")
+                             or (auth.session().get("name") or ""))
+        go = st.form_submit_button("Create the page", use_container_width=True)
+
+    md = None
+    if go:
+        lines = [f"# {ref.strip()}" if ref.strip() else f"# {kind}"]
+        if to.strip():
+            lines.append(f"**To:** {to.strip()}")
+        if body.strip():
+            lines.append("")
+            lines.append(body.strip())
+        elif kind.startswith("Blank"):
+            lines.append("")
+            lines.append("&nbsp;\n\n&nbsp;\n\n&nbsp;\n\n&nbsp;\n\n&nbsp;")
+        if sign.strip():
+            lines.append("")
+            lines.append(f"**{sign.strip()}**")
+        md = "\n\n".join(lines)
+    studio.emit("letter", go, "", _slug(ref or kind, "letter"),
+                ref or "Letterhead", raw_md=md, allow_refine=False)
+
+
+# =============================================================================
 #  Deliver & publish
 # =============================================================================
 def tool_handout():
@@ -549,6 +609,7 @@ REGISTRY = {
     "quiz": tool_quiz, "flashcards": tool_flashcards, "studyplan": tool_studyplan,
     "script": tool_script, "codeexplain": tool_codeexplain,
     "cheatsheet": tool_cheatsheet,
+    "notes": tool_notes, "letter": tool_letter,
     "handout": tool_handout, "runbook": tool_runbook, "article": tool_article,
     "comms": tool_comms,
 }

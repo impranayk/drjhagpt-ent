@@ -367,25 +367,32 @@ def upload_file(data: bytes, filename: str) -> Optional[str]:
         return None
 
 
-def post_to_website(*, title: str, html: str, category: str = "post",
-                    status: str = "draft") -> Optional[str]:
-    """Push an article to drpranayjha.com as a draft, if the bridge is configured.
+def post_to_website(*, title: str, html: str, category: str = "tech-notes",
+                    status: str = "publish", unlisted: bool = True,
+                    tags: str = None) -> Optional[str]:
+    """Push a note to drpranayjha.com, if the bridge is configured.
 
-    Returns the created post's edit URL, or None when the bridge is off.
+    Returns the post's public URL (or edit URL for a draft). The endpoint always
+    files it under Tech Notes and, when unlisted, keeps it out of the blog, search
+    and feeds while leaving the link itself live.
     """
     if not config.WEBSITE_POST_READY:
         return None
     import httpx
 
+    payload = {"title": title, "content": html, "category": category,
+               "status": status, "unlisted": bool(unlisted)}
+    if tags:
+        payload["tags"] = tags
     try:
         r = httpx.post(config.WEBSITE_POST_URL,
                        params={"token": config.WEBSITE_POST_TOKEN},
-                       json={"title": title, "content": html,
-                             "category": category, "status": status},
-                       timeout=45)
+                       json=payload, timeout=45)
         if r.status_code >= 400:
             raise RuntimeError(f"Website returned {r.status_code}: {r.text[:200]}")
         data = r.json()
-        return data.get("edit_url") or data.get("link") or "ok"
+        if status == "draft":
+            return data.get("edit_url") or data.get("url") or "ok"
+        return data.get("url") or data.get("edit_url") or "ok"
     except Exception as exc:
         raise RuntimeError(str(exc))

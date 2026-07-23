@@ -41,6 +41,9 @@ TOOLS = [
     ("script", "Script Studio", "PowerCLI, Ansible, Terraform, Python - explained."),
     ("codeexplain", "Code Explainer", "Paste code or config; get a teaching walkthrough."),
     ("cheatsheet", "Cheat Sheet", "A dense one-page command reference to hand out."),
+    # Write yourself (no AI, no tokens)
+    ("notes", "My Notes", "Write your own notes or content, then share or publish it."),
+    ("letter", "Letterhead", "A branded blank page or letter to print or send."),
     # Deliver & publish
     ("handout", "Student Handout", "Take-away notes that stand alone after the session."),
     ("runbook", "Runbook / SOP", "An operational procedure with rollback and validation."),
@@ -57,6 +60,7 @@ TOOL_GROUPS = [
     ("Hands-on", ["lab", "demo", "troubleshoot"]),
     ("Practice & assess", ["quiz", "flashcards", "studyplan"]),
     ("Code & config", ["script", "codeexplain", "cheatsheet"]),
+    ("Write yourself", ["notes", "letter"]),
     ("Deliver & publish", ["handout", "runbook", "article", "comms"]),
 ]
 
@@ -217,19 +221,24 @@ def _plain_text(md: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", t).strip()
 
 
-def share_row(md: str, title: str):
-    """Quick share by email or WhatsApp. For a formatted copy, use Print/Word."""
+def share_row(md: str, title: str, doc_html: str = None):
+    """Quick share: Print, Email, WhatsApp. For a formatted copy, use Print/Word."""
     body = _plain_text(md)
     if len(body) > 2800:
         body = body[:2800].rstrip() + "\n\n… (full version attached - see Print / PDF)"
     mail = (f"mailto:?subject={_urlquote(title + ' — DrJhaGPT Pro')}"
             f"&body={_urlquote(body)}")
     wa = f"https://wa.me/?text={_urlquote(title + chr(10) + chr(10) + body[:1400])}"
-    st.markdown(
-        f'<div class="dj-share"><span class="dj-share-lbl">Send</span>'
-        f'<a class="dj-share-a" href="{mail}">Email</a>'
-        f'<a class="dj-share-a" href="{wa}" target="_blank" rel="noopener">WhatsApp</a>'
-        "</div>", unsafe_allow_html=True)
+    c1, c2 = st.columns([1, 3])
+    if doc_html:
+        with c1:
+            components.html(print_button(doc_html, "Print"), height=44)
+    with c2:
+        st.markdown(
+            f'<div class="dj-share"><span class="dj-share-lbl">Send</span>'
+            f'<a class="dj-share-a" href="{mail}">Email</a>'
+            f'<a class="dj-share-a" href="{wa}" target="_blank" rel="noopener">WhatsApp</a>'
+            "</div>", unsafe_allow_html=True)
 
 
 def table_to_csv(md: str) -> str:
@@ -361,24 +370,32 @@ def _publish_ui(tool_key: str, md: str, title: str):
             m3, m4 = st.columns(2)
             meet_id = m3.text_input("Meeting ID", key=f"pubmi::{tool_key}")
             meet_pass = m4.text_input("Passcode", key=f"pubmk::{tool_key}")
-            video_url = st.text_input(
-                "Recording / YouTube link", key=f"pubv::{tool_key}",
-                placeholder="https://youtu.be/…",
-                help="Shown as a Watch button on the shared item. One per line "
-                     "for several videos.")
+            video_url = st.text_area(
+                "Recording / YouTube links", key=f"pubv::{tool_key}", height=76,
+                placeholder="https://youtu.be/aaa\nhttps://youtu.be/bbb",
+                help="One link per line. Each shows as its own Watch button on the "
+                     "shared item.")
 
             attach = st.file_uploader("Attach a file (optional)",
                                       key=f"puba::{tool_key}")
-            to_site = False
-            if config.WEBSITE_POST_READY and tool_key == "article":
-                to_site = st.checkbox(
-                    "Also create a DRAFT post on drpranayjha.com", value=False,
-                    key=f"pubw::{tool_key}")
+
+            site_visibility = "off"
+            if config.WEBSITE_POST_READY:
+                st.markdown("**Also post to drpranayjha.com** (Tech Notes)")
+                site_visibility = st.radio(
+                    "Website", ["Don't post", "Unlisted (share by link only)",
+                                "Draft (review on the site first)", "Public"],
+                    horizontal=False, key=f"pubw::{tool_key}",
+                    label_visibility="collapsed",
+                    help="Unlisted posts are live at their own link for anyone you "
+                         "share it with, but never appear in the blog, search or "
+                         "feeds.")
             go = st.form_submit_button("Publish", use_container_width=True)
         if not go:
             return
-        if not picked and not picked_people and batch == "— none —":
-            st.error("Choose at least one track, person or batch to share with.")
+        to_site = site_visibility not in ("off", "Don't post")
+        if not picked and not picked_people and batch == "— none —" and not to_site:
+            st.error("Choose a track, person, batch, or the website to publish to.")
             return
         for label, u in (("Meeting link", meet_url), ("Recording link", video_url)):
             for one in (u or "").splitlines():
@@ -395,31 +412,46 @@ def _publish_ui(tool_key: str, md: str, title: str):
             url = store.upload_file(attach.getvalue(), attach.name)
             if url is None:
                 st.warning("The file couldn't be uploaded - publishing without it.")
-        try:
-            store.publish(
-                author=auth.session().get("username", "anon"), tool=tool_key,
-                title=title, content_md=md, tracks=picked,
-                people=picked_people or None,
-                batch_code=None if batch == "— none —" else batch,
-                course=course or None,
-                tech_area=st.session_state.get(f"area::{tool_key}"),
-                product_version=st.session_state.get("meta_version") or None,
-                tags=tags or None, attachment_url=url,
-                meeting=meeting, video_url=video_url.strip() or None)
-            store.log_event(auth.session().get("username", "anon"), "publish",
-                            detail=tool_key, track=auth.track())
-            st.success("Published to the shared library.")
-        except Exception as exc:
-            st.error(f"Couldn't publish: {exc}")
-            return
+
+        shared_internally = bool(picked or picked_people or batch != "— none —")
+        if shared_internally:
+            try:
+                store.publish(
+                    author=auth.session().get("username", "anon"), tool=tool_key,
+                    title=title, content_md=md, tracks=picked,
+                    people=picked_people or None,
+                    batch_code=None if batch == "— none —" else batch,
+                    course=course or None,
+                    tech_area=st.session_state.get(f"area::{tool_key}"),
+                    product_version=st.session_state.get("meta_version") or None,
+                    tags=tags or None, attachment_url=url,
+                    meeting=meeting, video_url=video_url.strip() or None)
+                store.log_event(auth.session().get("username", "anon"), "publish",
+                                detail=tool_key, track=auth.track())
+                st.success("Published to the shared library.")
+            except Exception as exc:
+                st.error(f"Couldn't publish: {exc}")
+                return
         if to_site:
+            wp_status = "draft" if site_visibility.startswith("Draft") else "publish"
+            unlisted = site_visibility.startswith("Unlisted")
             try:
                 html_doc = render.download_html(md, title, meta=doc_meta())
-                where = store.post_to_website(title=title, html=html_doc,
-                                              category="post", status="draft")
-                st.success(f"Draft created on drpranayjha.com ({where}).")
+                link = store.post_to_website(
+                    title=title, html=html_doc, category="tech-notes",
+                    status=wp_status, unlisted=unlisted, tags=tags or None)
+                if wp_status == "draft":
+                    st.success(f"Draft created on drpranayjha.com. Review and "
+                               f"publish it there: {link}")
+                elif unlisted:
+                    st.success("Posted to drpranayjha.com as **unlisted** — live at "
+                               "this link (share it with whoever should see it), but "
+                               f"not shown publicly:\n\n{link}")
+                    st.code(link)
+                else:
+                    st.success(f"Posted publicly to drpranayjha.com: {link}")
             except Exception as exc:
-                st.warning(f"Published here, but the website post failed: {exc}")
+                st.warning(f"The website post failed: {exc}")
 
 
 # --- The main loop -----------------------------------------------------------
@@ -438,13 +470,25 @@ REFINEMENTS = [
 
 
 def emit(tool_key: str, submitted: bool, prompt: str, filename_base: str,
-         title: str, temperature: float = None, sources=None, max_tokens: int = None):
-    """Generate / regenerate / refine a document, then render and export it."""
+         title: str, temperature: float = None, sources=None, max_tokens: int = None,
+         raw_md: str = None, allow_refine: bool = True):
+    """Generate / regenerate / refine a document, then render and export it.
+
+    `raw_md` bypasses the model entirely: the caller supplies finished Markdown
+    (a hand-written note, a letterhead) and it flows through the same rendering,
+    export and publishing path with no tokens spent.
+    """
     out_key, prompt_key = f"out::{tool_key}", f"prompt::{tool_key}"
     model = st.session_state.get("model")
 
     action = None
-    if submitted:
+    if submitted and raw_md is not None:
+        st.session_state[out_key] = raw_md
+        st.session_state[f"src::{tool_key}"] = []
+        add_history(tool_key, title, raw_md)
+        store.log_event(auth.session().get("username", "anon"), "compose",
+                        detail=tool_key, track=auth.track())
+    elif submitted:
         st.session_state[prompt_key] = prompt
         st.session_state[f"src::{tool_key}"] = sources or []
         action = ("gen", prompt)
@@ -487,16 +531,18 @@ def emit(tool_key: str, submitted: bool, prompt: str, filename_base: str,
 
     render_sources(st.session_state.get(f"src::{tool_key}"))
 
-    # Quick refine
-    st.markdown('<p class="dj-refine-label">Refine</p>', unsafe_allow_html=True)
-    cols = st.columns(len(REFINEMENTS) + 1)
-    for i, (label, instruction) in enumerate(REFINEMENTS):
-        if cols[i].button(label, key=f"rf{i}::{tool_key}", use_container_width=True):
-            st.session_state[f"refine::{tool_key}"] = instruction
+    # Quick refine (skipped for hand-written content, which has no prompt to redo).
+    if allow_refine:
+        st.markdown('<p class="dj-refine-label">Refine</p>', unsafe_allow_html=True)
+        cols = st.columns(len(REFINEMENTS) + 1)
+        for i, (label, instruction) in enumerate(REFINEMENTS):
+            if cols[i].button(label, key=f"rf{i}::{tool_key}", use_container_width=True):
+                st.session_state[f"refine::{tool_key}"] = instruction
+                st.rerun()
+        if cols[-1].button("Regenerate", key=f"rg::{tool_key}",
+                           use_container_width=True):
+            st.session_state[f"regen::{tool_key}"] = True
             st.rerun()
-    if cols[-1].button("Regenerate", key=f"rg::{tool_key}", use_container_width=True):
-        st.session_state[f"regen::{tool_key}"] = True
-        st.rerun()
 
     # Export
     doc_html = render.to_document(md, logo, meta, config.BRAND_FULL)
@@ -544,7 +590,7 @@ def emit(tool_key: str, submitted: bool, prompt: str, filename_base: str,
                                        mime="text/csv", key=f"dlc::{tool_key}",
                                        use_container_width=True)
 
-    share_row(md, title)
+    share_row(md, title, doc_html)
     st.caption("Draft — review before you teach from it. Anything the model was "
                "unsure of is marked **[verify]**.")
 

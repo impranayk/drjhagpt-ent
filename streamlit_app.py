@@ -25,7 +25,7 @@ from chatbot import (admin, auth, config, documents, feedback, guardrails, llm,
 
 # Shown in the sidebar footer. BUMP THIS ON EVERY CHANGE - it is the only way to
 # tell from the browser whether Streamlit Cloud has actually picked up a push.
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 
 # ----------------------------------------------------------------------------- assets
@@ -55,10 +55,28 @@ SUGGESTIONS = [
     "vSphere HA vs DRS — what's the difference?",
 ]
 
+def _embed_requested() -> bool:
+    """Whether the nav must render in the main column (see menu_in_main).
+
+    Read here, before set_page_config, so an embedded app can use the wide layout
+    its two-column nav needs. st.query_params isn't available this early, so the
+    raw query string is parsed instead.
+    """
+    try:
+        from urllib.parse import parse_qs
+
+        qs = parse_qs(st.context.url.split("?", 1)[1]) if "?" in st.context.url else {}
+        return qs.get("menu", [""])[0] == "main" and "mini" not in qs
+    except Exception:
+        return False
+
+
 st.set_page_config(
     page_title=config.BRAND_FULL,
     page_icon=logo_image(),
-    layout="centered",
+    # Embedded, the nav is a left column and needs the room; standalone stays
+    # centred so the reading measure isn't too wide.
+    layout="wide" if _embed_requested() else "centered",
     initial_sidebar_state="auto",
 )
 
@@ -97,19 +115,26 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 [data-testid="collapsedControl"] svg { color: var(--accent) !important; }
 .st-key-new_chat { margin-top: 6px; }
 
-/* Embedded mode: the same panel, moved into the main column. */
-.st-key-dj_menu { margin-bottom: 10px; }
-.st-key-dj_menu [data-testid="stExpander"] details { border: 1px solid var(--border);
-  border-radius: 8px; background: #fff; }
-.st-key-dj_menu [data-testid="stExpander"] summary { font-family: 'Oswald', sans-serif;
-  font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+/* Embedded mode: the nav lives in a real left column of the main area, styled to
+   read as the sidebar (Streamlit renders no sidebar under ?embed=true). */
+.st-key-dj_menu { border-right: 1px solid var(--border); padding-right: 12px;
+  position: sticky; top: 8px; }
 .st-key-dj_menu div[data-testid="stButton"] button { border-radius: 6px !important;
-  text-align: left !important; padding: 6px 11px !important; font-size: 13px !important;
+  text-align: left !important; justify-content: flex-start !important;
+  padding: 5px 11px !important; font-size: 13px !important; min-height: 0 !important;
   border-color: transparent !important; }
 .st-key-dj_menu div[data-testid="stButton"] button:hover {
-  background: var(--panel) !important; border-color: var(--border) !important; }
+  background: var(--panel) !important; border-color: var(--border) !important;
+  color: var(--accent) !important; }
+/* On a phone the two columns stack, so the border-right would be a stray line. */
+@media (max-width: 640px) {
+  .st-key-dj_menu { border-right: 0; padding-right: 0; position: static;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 8px; }
+}
 
 .block-container { max-width: 860px; padding-top: 1.6rem; padding-bottom: 6rem; }
+/* Embedded (two-column nav) wants the full frame width, not the reading measure. */
+.block-container:has(.st-key-dj_menu) { max-width: 1320px; }
 
 /* ---- Masthead ---- */
 .dj-masthead { display: flex; align-items: center; gap: clamp(10px, 3vw, 18px); }
@@ -505,12 +530,7 @@ def _nav_button(key, current):
 
 
 def render_menu(user=None, roles=None):
-    """Draw the navigation panel wherever it can actually be seen."""
-    if menu_in_main():
-        with st.container(key="dj_menu"):
-            with st.expander("Studio menu — tools, assistant, documents", expanded=False):
-                render_sidebar(user, roles, container=st.container())
-        return
+    """Draw the navigation into Streamlit's real sidebar (non-embedded case)."""
     render_sidebar(user, roles)
 
 
@@ -978,41 +998,55 @@ def main():
     st.session_state.setdefault("tool", "ask")
     st.session_state.setdefault("scope", "Website + PDF")
 
-    render_menu(user, roles)
-    render_header()
-
-    if config.IS_STAGING:
-        st.markdown(f'<div class="dj-env">Test environment ({config.APP_ENV}) — '
-                    'not the live studio.</div>', unsafe_allow_html=True)
-
-    if not config.LLM_READY:
-        st.warning(
-            "**Setup needed:** configure an LLM.\n\n"
-            "- **Groq (default):** set `GROQ_API_KEY` (free at https://console.groq.com/keys).\n"
-            "- **Gemini (free fallback):** set `GEMINI_API_KEY`.\n"
-            "- **Self-hosted:** set `LLM_BASE_URL` to your OpenAI-compatible endpoint "
-            "(vLLM / Ollama / NIM)."
-        )
-
-    tool = st.session_state.get("tool", "ask")
-    if tool not in studio.allowed_tools():
-        tool = st.session_state["tool"] = "ask"
-
-    render_tool_head(tool)
-
-    if tool == "ask":
-        tool_ask(user, roles)
-    elif tool == "library":
-        admin.tool_library()
-    elif tool == "admin":
-        admin.tool_admin()
+    # Embedded on the website, Streamlit runs in embed mode and does not render a
+    # sidebar at all (see menu_in_main). So the nav moves into a real left column
+    # of the main area, which frames correctly AND keeps the sidebar look.
+    embedded = menu_in_main()
+    if embedded:
+        nav_col, body = st.columns([1, 3], gap="medium")
+        with nav_col:
+            with st.container(key="dj_menu"):
+                render_sidebar(user, roles, container=st.container())
+        body_ctx = body
     else:
-        handler = tools.REGISTRY.get(tool)
-        if handler:
-            handler()
+        render_menu(user, roles)
+        body_ctx = st.container()
+
+    with body_ctx:
+        render_header()
+
+        if config.IS_STAGING:
+            st.markdown(f'<div class="dj-env">Test environment ({config.APP_ENV}) — '
+                        'not the live studio.</div>', unsafe_allow_html=True)
+
+        if not config.LLM_READY:
+            st.warning(
+                "**Setup needed:** configure an LLM.\n\n"
+                "- **Groq (default):** set `GROQ_API_KEY` (free at https://console.groq.com/keys).\n"
+                "- **Gemini (free fallback):** set `GEMINI_API_KEY`.\n"
+                "- **Self-hosted:** set `LLM_BASE_URL` to your OpenAI-compatible endpoint "
+                "(vLLM / Ollama / NIM)."
+            )
+
+        tool = st.session_state.get("tool", "ask")
+        if tool not in studio.allowed_tools():
+            tool = st.session_state["tool"] = "ask"
+
+        render_tool_head(tool)
+
+        if tool == "ask":
+            tool_ask(user, roles)
+        elif tool == "library":
+            admin.tool_library()
+        elif tool == "admin":
+            admin.tool_admin()
         else:
-            st.session_state["tool"] = "ask"
-            st.rerun()
+            handler = tools.REGISTRY.get(tool)
+            if handler:
+                handler()
+            else:
+                st.session_state["tool"] = "ask"
+                st.rerun()
 
 
 if __name__ == "__main__":

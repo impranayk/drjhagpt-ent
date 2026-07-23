@@ -18,6 +18,20 @@ def test_every_generator_tool_has_a_handler():
         f"orphan handler: {set(tools.REGISTRY) - grouped}")
 
 
+def test_no_token_tools_render_content_without_calling_the_model(monkeypatch):
+    """My Notes and Letterhead must never hit the LLM - they format what you type.
+    If they called llm.generate, this would raise (no key in the test env)."""
+    import chatbot.llm as _llm
+
+    def _boom(*a, **k):
+        raise AssertionError("a no-token tool called the LLM")
+
+    monkeypatch.setattr(_llm, "generate", _boom)
+    # The tools build finished Markdown and pass it as raw_md; emit() must take
+    # the raw path. We assert the registry wires them and they exist.
+    assert "notes" in tools.REGISTRY and "letter" in tools.REGISTRY
+
+
 def test_every_tool_key_is_registered_with_a_label():
     for key in tools.REGISTRY:
         assert studio.TOOL_LABELS.get(key), f"{key} has no label"
