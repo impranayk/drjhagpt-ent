@@ -25,7 +25,7 @@ from chatbot import (admin, auth, config, documents, feedback, guardrails, llm,
 
 # Shown in the sidebar footer. BUMP THIS ON EVERY CHANGE - it is the only way to
 # tell from the browser whether Streamlit Cloud has actually picked up a push.
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 
 
 # ----------------------------------------------------------------------------- assets
@@ -665,12 +665,18 @@ def render_sidebar(user=None, roles=None, container=None):
             s = observability.summarize()
             fb = feedback.summary()
             st.markdown('<div class="dj-sb-label">Metrics</div>', unsafe_allow_html=True)
+            # One line, no <br>: a multi-line status div overflows the element
+            # container Streamlit sizes to a single text line, so the next widget
+            # (Log out) painted over the second line. No emoji either - it
+            # rendered as a stray glyph and is off the brand's no-emoji style.
             st.markdown(
-                f'<div class="dj-sb-status"><b>{s.get("traces", 0)}</b> traces<br>'
-                f'<b>{fb["up"]}</b> up · <b>{fb["down"]}</b> down</div>',
+                f'<div class="dj-sb-status"><b>{s.get("traces", 0)}</b> traces '
+                f'&nbsp;·&nbsp; <b>{fb["up"]}</b> up &nbsp;·&nbsp; '
+                f'<b>{fb["down"]}</b> down</div>',
                 unsafe_allow_html=True)
 
         if config.ENABLE_AUTH and user:
+            st.markdown('<div class="dj-sb-sep"></div>', unsafe_allow_html=True)
             auth.render_logout()
         st.markdown(f'<div class="dj-sb-ver">v{APP_VERSION}</div>',
                     unsafe_allow_html=True)
